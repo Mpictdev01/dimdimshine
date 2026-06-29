@@ -83,7 +83,7 @@ export default function Sidebar() {
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
 
-      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden">
+      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent">
         {menuItems.map((item) => {
           const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
           const hasSubItems = !!item.subItems;
@@ -106,8 +106,12 @@ export default function Sidebar() {
                     {!isCollapsed && <span className="font-medium">{item.name}</span>}
                   </div>
                   {!isCollapsed && (
-                    <div className={isActive ? "text-blue-500" : "text-slate-400 group-hover:text-slate-300"}>
-                      {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <div className={clsx(
+                      "transition-transform duration-300",
+                      isActive ? "text-blue-500" : "text-slate-400 group-hover:text-slate-300",
+                      isExpanded ? "rotate-90" : ""
+                    )}>
+                      <ChevronRight size={16} />
                     </div>
                   )}
                   
@@ -138,25 +142,34 @@ export default function Sidebar() {
                 </Link>
               )}
 
-              {hasSubItems && isExpanded && !isCollapsed && (
-                <div className="ml-9 flex flex-col gap-1 mt-1">
-                  {item.subItems?.map(subItem => {
-                    const isSubActive = pathname === subItem.path || pathname.startsWith(`${subItem.path}/`);
-                    return (
-                      <Link
-                        key={subItem.name}
-                        href={subItem.path}
-                        className={clsx(
-                          "px-3 py-2 rounded-lg transition-colors text-sm block",
-                          isSubActive
-                            ? "text-blue-400 font-medium bg-blue-600/10"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800"
-                        )}
-                      >
-                        {subItem.name}
-                      </Link>
-                    )
-                  })}
+              {hasSubItems && !isCollapsed && (
+                <div 
+                  className={clsx(
+                    "grid transition-all duration-300 ease-in-out",
+                    isExpanded ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0"
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    <div className="ml-9 flex flex-col gap-1">
+                      {item.subItems?.map(subItem => {
+                        const isSubActive = pathname === subItem.path || pathname.startsWith(`${subItem.path}/`);
+                        return (
+                          <Link
+                            key={subItem.name}
+                            href={subItem.path}
+                            className={clsx(
+                              "px-3 py-2 rounded-lg transition-colors text-sm block",
+                              isSubActive
+                                ? "text-blue-400 font-medium bg-blue-600/10"
+                                : "text-slate-400 hover:text-white hover:bg-slate-800"
+                            )}
+                          >
+                            {subItem.name}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

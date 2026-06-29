@@ -79,7 +79,7 @@ export default function AdminReports() {
                 <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
                   <th className="font-medium p-4 pl-6">Tanggal & Waktu</th>
                   <th className="font-medium p-4">ID Transaksi</th>
-                  <th className="font-medium p-4">Kasir</th>
+                  <th className="font-medium p-4">Sales / Petugas</th>
                   <th className="font-medium p-4">Metode</th>
                   <th className="font-medium p-4">Tipe</th>
                   <th className="font-medium p-4 text-right pr-6">Total Tagihan</th>

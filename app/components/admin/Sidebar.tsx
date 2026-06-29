@@ -12,17 +12,55 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  ChevronDown,
+  Banknote
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
 
 const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
-  { name: 'Produk', icon: Package, path: '/admin/products' },
-  { name: 'Inventaris', icon: Boxes, path: '/admin/inventory' },
-  { name: 'Laporan', icon: FileText, path: '/admin/reports' },
-  { name: 'Karyawan', icon: Users, path: '/admin/employees' },
+  { 
+    name: 'Produk', 
+    icon: Package, 
+    path: '/admin/products',
+    subItems: [
+      { name: 'Daftar Produk', path: '/admin/products' },
+      { name: 'Kategori', path: '/admin/products/categories' },
+      { name: 'Satuan', path: '/admin/products/units' },
+    ]
+  },
+  { 
+    name: 'Inventory', 
+    icon: Boxes, 
+    path: '/admin/inventory',
+    subItems: [
+      { name: 'Pembelian (Barang Masuk)', path: '/admin/inventory/purchases' },
+      { name: 'Data Supplier', path: '/admin/inventory/suppliers' },
+      { name: 'Penyesuaian Stok', path: '/admin/inventory/adjustments' },
+    ]
+  },
+  { 
+    name: 'Pelanggan', 
+    icon: Users,
+    path: '/admin/customers',
+    subItems: [
+      { name: 'Daftar Toko', path: '/admin/customers' },
+      { name: 'Area / Rute', path: '/admin/customers/areas' },
+    ]
+  },
+  { 
+    name: 'Riwayat & Cetak', 
+    icon: FileText, 
+    path: '/admin/reports',
+    subItems: [
+      { name: 'Riwayat Penjualan', path: '/admin/reports/sales' },
+      { name: 'Laporan Stok', path: '/admin/reports/stock' },
+    ]
+  },
+  { name: 'Piutang', icon: Banknote, path: '/admin/receivables' },
+  { name: 'Sales & Pegawai', icon: Users, path: '/admin/employees' },
   { name: 'Pengaturan', icon: Settings, path: '/admin/settings' },
 ];
 
@@ -30,10 +68,16 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
 
   const handleLogout = () => {
     sessionStorage.removeItem('admin_auth');
     router.push('/admin/login');
+  };
+
+  const toggleMenu = (name: string) => {
+    if (isCollapsed) setIsCollapsed(false);
+    setExpandedMenus(prev => ({ ...prev, [name]: !prev[name] }));
   };
 
   return (
@@ -58,30 +102,96 @@ export default function Sidebar() {
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
 
-      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden">
+      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent">
         {menuItems.map((item) => {
           const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
+          const hasSubItems = !!item.subItems;
+          const isExpanded = expandedMenus[item.name];
+
           return (
-            <Link
-              key={item.name}
-              href={item.path}
-              className={clsx(
-                "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors group relative",
-                isActive 
-                  ? "bg-blue-600/10 text-blue-400" 
-                  : "hover:bg-slate-800 hover:text-white"
+            <div key={item.name} className="flex flex-col mb-1">
+              {hasSubItems ? (
+                <button
+                  onClick={() => toggleMenu(item.name)}
+                  className={clsx(
+                    "flex items-center justify-between px-3 py-3 rounded-lg transition-colors group relative w-full",
+                    isActive 
+                      ? "bg-blue-600/10 text-blue-400" 
+                      : "hover:bg-slate-800 hover:text-white"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon size={20} className={isActive ? "text-blue-500" : "text-slate-400 group-hover:text-slate-300"} />
+                    {!isCollapsed && <span className="font-medium">{item.name}</span>}
+                  </div>
+                  {!isCollapsed && (
+                    <div className={clsx(
+                      "transition-transform duration-300",
+                      isActive ? "text-blue-500" : "text-slate-400 group-hover:text-slate-300",
+                      isExpanded ? "rotate-90" : ""
+                    )}>
+                      <ChevronRight size={16} />
+                    </div>
+                  )}
+                  
+                  {isCollapsed && (
+                    <div className="absolute left-14 bg-slate-800 text-white px-2 py-1 rounded text-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
+                      {item.name}
+                    </div>
+                  )}
+                </button>
+              ) : (
+                <Link
+                  href={item.path}
+                  className={clsx(
+                    "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors group relative",
+                    isActive 
+                      ? "bg-blue-600/10 text-blue-400" 
+                      : "hover:bg-slate-800 hover:text-white"
+                  )}
+                >
+                  <item.icon size={20} className={isActive ? "text-blue-500" : "text-slate-400 group-hover:text-slate-300"} />
+                  {!isCollapsed && <span className="font-medium">{item.name}</span>}
+                  
+                  {isCollapsed && (
+                    <div className="absolute left-14 bg-slate-800 text-white px-2 py-1 rounded text-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
+                      {item.name}
+                    </div>
+                  )}
+                </Link>
               )}
-            >
-              <item.icon size={20} className={isActive ? "text-blue-500" : "text-slate-400 group-hover:text-slate-300"} />
-              {!isCollapsed && <span className="font-medium">{item.name}</span>}
-              
-              {/* Tooltip for collapsed mode */}
-              {isCollapsed && (
-                <div className="absolute left-14 bg-slate-800 text-white px-2 py-1 rounded text-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
-                  {item.name}
+
+              {hasSubItems && !isCollapsed && (
+                <div 
+                  className={clsx(
+                    "grid transition-all duration-300 ease-in-out",
+                    isExpanded ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0"
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    <div className="ml-9 flex flex-col gap-1">
+                      {item.subItems?.map(subItem => {
+                        const isSubActive = pathname === subItem.path || pathname.startsWith(`${subItem.path}/`);
+                        return (
+                          <Link
+                            key={subItem.name}
+                            href={subItem.path}
+                            className={clsx(
+                              "px-3 py-2 rounded-lg transition-colors text-sm block",
+                              isSubActive
+                                ? "text-blue-400 font-medium bg-blue-600/10"
+                                : "text-slate-400 hover:text-white hover:bg-slate-800"
+                            )}
+                          >
+                            {subItem.name}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
-            </Link>
+            </div>
           );
         })}
       </nav>

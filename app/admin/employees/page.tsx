@@ -123,7 +123,7 @@ export default function AdminEmployees() {
       case 'manager':
         return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-700"><ShieldCheck size={12}/> Manager</span>;
       default:
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700"><User size={12}/> Kasir</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700"><User size={12}/> Sales</span>;
     }
   };
 
@@ -131,7 +131,7 @@ export default function AdminEmployees() {
     <div className="p-8 h-full relative flex flex-col">
       <div className="flex justify-between items-center mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Manajemen Karyawan</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Manajemen Sales & Pegawai</h1>
           <p className="text-slate-500">Kelola akun, role, dan PIN login sistem.</p>
         </div>
         <button 
@@ -139,7 +139,7 @@ export default function AdminEmployees() {
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
         >
           <Plus size={20} />
-          Tambah Karyawan
+          Tambah Pegawai
         </button>
       </div>
 
@@ -207,7 +207,7 @@ export default function AdminEmployees() {
       >
         <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50 shrink-0">
           <div>
-            <h2 className="text-2xl font-bold text-slate-800">{editingEmployee ? 'Edit Karyawan' : 'Tambah Karyawan Baru'}</h2>
+            <h2 className="text-2xl font-bold text-slate-800">{editingEmployee ? 'Edit Pegawai' : 'Tambah Pegawai Baru'}</h2>
             <p className="text-slate-500 text-sm mt-1">Mengelola akses ke antarmuka POS dan Backoffice.</p>
           </div>
           <button 
@@ -230,7 +230,7 @@ export default function AdminEmployees() {
                   value={formData.full_name}
                   onChange={e => setFormData({...formData, full_name: e.target.value})}
                   className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors" 
-                  placeholder="Nama Kasir / Manajer" 
+                  placeholder="Nama Sales / Manajer" 
                 />
               </div>
               
@@ -243,7 +243,7 @@ export default function AdminEmployees() {
                     className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors appearance-none"
                     disabled={editingEmployee?.role === 'super_admin'}
                   >
-                    <option value="cashier">Kasir (POS Only)</option>
+                    <option value="cashier">Sales (POS Only)</option>
                     <option value="manager">Manajer (Backoffice)</option>
                     {editingEmployee?.role === 'super_admin' && <option value="super_admin">Super Admin</option>}
                   </select>

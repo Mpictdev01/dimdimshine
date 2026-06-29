@@ -7,7 +7,7 @@ export interface CartItem {
   name: string;
   price: number;
   quantity: number;
-  modifiers?: Record<string, string>;
+  unit?: string;
 }
 
 export interface ShiftInfo {
@@ -21,8 +21,9 @@ export interface ShiftInfo {
 interface PosState {
   cart: CartItem[];
   currentShift: ShiftInfo | null;
-  activeTable: string | null;
-  orderType: 'dine_in' | 'takeaway';
+  activeCustomer: { id: string, name: string } | null;
+  orderType: 'delivery' | 'pickup';
+  notes: string;
   
   // Actions
   addToCart: (item: Omit<CartItem, 'id'>) => void;
@@ -31,8 +32,9 @@ interface PosState {
   clearCart: () => void;
   setShift: (shift: ShiftInfo) => void;
   endShift: () => void;
-  setActiveTable: (table: string | null) => void;
-  setOrderType: (type: 'dine_in' | 'takeaway') => void;
+  setActiveCustomer: (customer: { id: string, name: string } | null) => void;
+  setOrderType: (type: 'delivery' | 'pickup') => void;
+  setNotes: (notes: string) => void;
 }
 
 export const usePosStore = create<PosState>()(
@@ -40,12 +42,13 @@ export const usePosStore = create<PosState>()(
     (set) => ({
       cart: [],
       currentShift: null,
-      activeTable: null,
-      orderType: 'dine_in',
+      activeCustomer: null,
+      orderType: 'delivery',
+      notes: '',
 
       addToCart: (item) => set((state) => {
         const existingItem = state.cart.find(
-          (i) => i.productId === item.productId && JSON.stringify(i.modifiers) === JSON.stringify(item.modifiers)
+          (i) => i.productId === item.productId
         );
         if (existingItem) {
           return {
@@ -65,15 +68,17 @@ export const usePosStore = create<PosState>()(
         cart: state.cart.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, quantity) } : i)),
       })),
 
-      clearCart: () => set({ cart: [] }),
+      clearCart: () => set({ cart: [], activeCustomer: null, notes: '', orderType: 'delivery' }),
       
       setShift: (shift) => set({ currentShift: shift }),
       
       endShift: () => set({ currentShift: null }),
       
-      setActiveTable: (table) => set({ activeTable: table }),
+      setActiveCustomer: (customer) => set({ activeCustomer: customer }),
       
       setOrderType: (type) => set({ orderType: type }),
+
+      setNotes: (notes) => set({ notes }),
     }),
     {
       name: 'pos-storage',

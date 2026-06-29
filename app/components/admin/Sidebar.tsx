@@ -13,7 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Banknote
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
@@ -25,50 +26,41 @@ const menuItems = [
     icon: Package, 
     path: '/admin/products',
     subItems: [
-      { name: 'Item Library', path: '/admin/products/item-library' },
-      { name: 'Modifiers', path: '/admin/products/modifiers' },
-      { name: 'Categories', path: '/admin/products/categories' },
-      { name: 'Bundle Package', path: '/admin/products/bundle-package' },
-      { name: 'Promo', path: '/admin/products/promo' },
-      { name: 'Discounts', path: '/admin/products/discounts' },
-      { name: 'Taxes', path: '/admin/products/taxes' },
-      { name: 'Gratuity', path: '/admin/products/gratuity' },
-      { name: 'Sales Type', path: '/admin/products/sales-type' },
-      { name: 'Brands', path: '/admin/products/brands' },
+      { name: 'Daftar Produk', path: '/admin/products' },
+      { name: 'Kategori', path: '/admin/products/categories' },
+      { name: 'Satuan', path: '/admin/products/units' },
     ]
   },
   { 
-    name: 'INVENTORY (Inventaris)', 
+    name: 'Inventory', 
     icon: Boxes, 
     path: '/admin/inventory',
     subItems: [
-      { name: 'Summary', path: '/admin/inventory/summary' },
-      { name: 'Suppliers', path: '/admin/inventory/suppliers' },
-      { name: 'Purchase Order (PO)', path: '/admin/inventory/purchase-order' },
-      { name: 'Transfer', path: '/admin/inventory/transfer' },
-      { name: 'Adjustment', path: '/admin/inventory/adjustment' },
+      { name: 'Pembelian (Barang Masuk)', path: '/admin/inventory/purchases' },
+      { name: 'Data Supplier', path: '/admin/inventory/suppliers' },
+      { name: 'Penyesuaian Stok', path: '/admin/inventory/adjustments' },
     ]
   },
   { 
-    name: 'Laporan', 
+    name: 'Pelanggan', 
+    icon: Users,
+    path: '/admin/customers',
+    subItems: [
+      { name: 'Daftar Toko', path: '/admin/customers' },
+      { name: 'Area / Rute', path: '/admin/customers/areas' },
+    ]
+  },
+  { 
+    name: 'Riwayat & Cetak', 
     icon: FileText, 
     path: '/admin/reports',
     subItems: [
-      { name: 'Sales', path: '/admin/reports/sales' },
-      { name: 'Transactions', path: '/admin/reports/transactions' },
-      { name: 'Invoices', path: '/admin/reports/invoices' },
-      { name: 'Shift', path: '/admin/reports/shift' },
+      { name: 'Riwayat Penjualan', path: '/admin/reports/sales' },
+      { name: 'Laporan Stok', path: '/admin/reports/stock' },
     ]
   },
-  { 
-    name: 'Customer', 
-    icon: Users, // using Users icon for now
-    path: '/admin/customers',
-    subItems: [
-      { name: 'Customer List', path: '/admin/customers/customer-list' },
-    ]
-  },
-  { name: 'Karyawan', icon: Users, path: '/admin/employees' },
+  { name: 'Piutang', icon: Banknote, path: '/admin/receivables' },
+  { name: 'Sales & Pegawai', icon: Users, path: '/admin/employees' },
   { name: 'Pengaturan', icon: Settings, path: '/admin/settings' },
 ];
 
@@ -76,9 +68,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
-    'Produk': true // default expanded for better UX if they are on a product page, but we can just set it true
-  });
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
 
   const handleLogout = () => {
     sessionStorage.removeItem('admin_auth');

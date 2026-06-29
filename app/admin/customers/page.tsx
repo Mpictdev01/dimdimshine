@@ -11,36 +11,41 @@ const supabase = createClient(
 
 export default function AdminCustomers() {
   const [customers, setCustomers] = useState<any[]>([]);
+  const [areas, setAreas] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterArea, setFilterArea] = useState('all');
 
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
-  const [formData, setFormData] = useState({ name: '', phone: '', address: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', address: '', area_id: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchCustomers();
+    fetchData();
   }, []);
 
-  const fetchCustomers = async () => {
+  const fetchData = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase.from('customers').select('*').order('name');
-    if (!error && data) {
-      setCustomers(data);
-    }
+    const [custRes, areaRes] = await Promise.all([
+      supabase.from('customers').select('*, customer_areas(name)').order('name'),
+      supabase.from('customer_areas').select('*').order('name')
+    ]);
+    
+    if (custRes.data) setCustomers(custRes.data);
+    if (areaRes.data) setAreas(areaRes.data);
+    
     setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus pelanggan ini?')) return;
+    if (!confirm('Apakah Anda yakin ingin menghapus pelanggan (toko) ini? Semua riwayat piutangnya mungkin akan bermasalah.')) return;
     
     const { error } = await supabase.from('customers').delete().eq('id', id);
     if (!error) {
       setCustomers(customers.filter(c => c.id !== id));
     } else {
-      alert('Gagal menghapus pelanggan. Mungkin memiliki riwayat transaksi.');
+      alert('Gagal menghapus pelanggan. Error: ' + error.message);
     }
   };
 
@@ -50,11 +55,12 @@ export default function AdminCustomers() {
       setFormData({ 
         name: customer.name, 
         phone: customer.phone || '', 
-        address: customer.address || '' 
+        address: customer.address || '',
+        area_id: customer.area_id || ''
       });
     } else {
       setEditingCustomer(null);
-      setFormData({ name: '', phone: '', address: '' });
+      setFormData({ name: '', phone: '', address: '', area_id: '' });
     }
     setIsModalOpen(true);
   };
@@ -71,7 +77,8 @@ export default function AdminCustomers() {
     const payload = { 
       name: formData.name,
       phone: formData.phone || null,
-      address: formData.address || null
+      address: formData.address || null,
+      area_id: formData.area_id || null
     };
 
     if (editingCustomer) {
@@ -79,67 +86,79 @@ export default function AdminCustomers() {
         .from('customers')
         .update(payload)
         .eq('id', editingCustomer.id)
-        .select()
+        .select('*, customer_areas(name)')
         .single();
         
       if (!error && data) {
         setCustomers(customers.map(c => c.id === data.id ? data : c));
         closeModal();
       } else {
-        alert('Gagal memperbarui pelanggan.');
+        alert('Gagal memperbarui pelanggan: ' + error?.message);
       }
     } else {
       const { data, error } = await supabase
         .from('customers')
         .insert([payload])
-        .select()
+        .select('*, customer_areas(name)')
         .single();
         
       if (!error && data) {
         setCustomers([...customers, data]);
         closeModal();
       } else {
-        alert('Gagal menambahkan pelanggan.');
+        alert('Gagal menambahkan pelanggan: ' + error?.message);
       }
     }
     setIsSubmitting(false);
   };
 
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (c.phone && c.phone.includes(searchQuery))
-  );
+  const filteredCustomers = customers.filter(c => {
+    const matchSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || (c.phone && c.phone.includes(searchQuery));
+    const matchArea = filterArea === 'all' || c.area_id === filterArea;
+    return matchSearch && matchArea;
+  });
 
   return (
     <div className="p-8 h-full relative flex flex-col">
       <div className="flex justify-between items-center mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Master Data Pelanggan</h1>
-          <p className="text-slate-500">Kelola daftar toko, agen, dan pelanggan distributor.</p>
+          <h1 className="text-2xl font-bold text-slate-800">Daftar Toko Pelanggan</h1>
+          <p className="text-slate-500">Kelola daftar toko yang rutin memesan barang ke Anda.</p>
         </div>
         <button 
           onClick={() => openModal()}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
         >
           <Plus size={20} />
-          Tambah Pelanggan
+          Tambah Toko Baru
         </button>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+        <div className="p-4 border-b border-slate-100 flex gap-4 items-center bg-slate-50 shrink-0">
           <div className="relative w-72">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <Search size={18} />
             </div>
             <input
               type="text"
-              placeholder="Cari nama atau telepon..."
+              placeholder="Cari nama toko atau no HP..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             />
           </div>
+          
+          <select 
+            value={filterArea}
+            onChange={e => setFilterArea(e.target.value)}
+            className="px-4 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          >
+            <option value="all">Semua Area/Rute</option>
+            {areas.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -151,33 +170,43 @@ export default function AdminCustomers() {
             <table className="w-full text-left border-collapse">
               <thead className="sticky top-0 bg-white shadow-sm z-10">
                 <tr className="text-slate-500 text-sm border-b border-slate-200">
-                  <th className="font-medium p-4 pl-6">Nama Toko/Pelanggan</th>
-                  <th className="font-medium p-4">No. Telepon</th>
+                  <th className="font-medium p-4 pl-6">Nama Toko</th>
+                  <th className="font-medium p-4">Area / Rute</th>
+                  <th className="font-medium p-4">No. Handphone</th>
                   <th className="font-medium p-4">Alamat</th>
                   <th className="font-medium p-4 text-right pr-6 w-32">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredCustomers.map((customer) => (
-                  <tr key={customer.id} className="hover:bg-slate-50/50 transition-colors">
+                {filteredCustomers.map((cust) => (
+                  <tr key={cust.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 pl-6 font-semibold text-slate-800">
-                      {customer.name}
+                      {cust.name}
+                    </td>
+                    <td className="p-4">
+                      {cust.customer_areas?.name ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                          {cust.customer_areas.name}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-sm">Belum diset</span>
+                      )}
                     </td>
                     <td className="p-4 text-slate-600">
-                      {customer.phone || '-'}
+                      {cust.phone || '-'}
                     </td>
                     <td className="p-4 text-slate-600">
-                      {customer.address || '-'}
+                      {cust.address || '-'}
                     </td>
                     <td className="p-4 pr-6 text-right space-x-2">
                       <button 
-                        onClick={() => openModal(customer)}
+                        onClick={() => openModal(cust)}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-block"
                       >
                         <Edit2 size={18} />
                       </button>
                       <button 
-                        onClick={() => handleDelete(customer.id)}
+                        onClick={() => handleDelete(cust.id)}
                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors inline-block"
                       >
                         <Trash2 size={18} />
@@ -187,8 +216,8 @@ export default function AdminCustomers() {
                 ))}
                 {filteredCustomers.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-500">
-                      Belum ada data pelanggan.
+                    <td colSpan={5} className="p-8 text-center text-slate-500">
+                      Tidak ada pelanggan yang ditemukan.
                     </td>
                   </tr>
                 )}
@@ -198,72 +227,70 @@ export default function AdminCustomers() {
         </div>
       </div>
 
-      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
               <h2 className="text-xl font-bold text-slate-800">
-                {editingCustomer ? 'Edit Pelanggan' : 'Tambah Pelanggan Baru'}
+                {editingCustomer ? 'Edit Toko' : 'Tambah Toko Baru'}
               </h2>
-              <button 
-                onClick={closeModal}
-                className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors"
-              >
+              <button onClick={closeModal} className="p-2 rounded-full hover:bg-slate-200 text-slate-500">
                 <X size={20} />
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Nama Toko / Pelanggan</label>
+            <form onSubmit={handleSubmit} className="p-6">
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Nama Toko / Pemilik</label>
                 <input 
                   type="text" 
                   required
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                   className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors" 
-                  placeholder="Misal: Toko Makmur Jaya" 
+                  placeholder="Misal: Toko Makmur / Pak Budi" 
                 />
               </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Area / Rute Kunjungan</label>
+                <select 
+                  value={formData.area_id}
+                  onChange={e => setFormData({...formData, area_id: e.target.value})}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors appearance-none" 
+                >
+                  <option value="">Pilih Area (Opsional)</option>
+                  {areas.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Nomor Telepon (Opsional)</label>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">No. HP (WhatsApp)</label>
                 <input 
                   type="text" 
                   value={formData.phone}
                   onChange={e => setFormData({...formData, phone: e.target.value})}
                   className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors" 
-                  placeholder="08123..." 
+                  placeholder="0812xxxxxx" 
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Alamat Pengiriman (Opsional)</label>
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Alamat Detail</label>
                 <textarea 
-                  rows={3}
                   value={formData.address}
                   onChange={e => setFormData({...formData, address: e.target.value})}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors resize-none" 
-                  placeholder="Jl. Raya..." 
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors h-24 resize-none" 
+                  placeholder="Nama jalan, RT/RW, Patokan..." 
                 />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button 
-                  type="button"
-                  onClick={closeModal}
-                  className="px-5 py-2.5 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-                >
-                  Batal
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors flex items-center gap-2"
-                >
-                  {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                  Simpan
+                <button type="button" onClick={closeModal} className="px-5 py-2.5 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-colors">Batal</button>
+                <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors flex items-center gap-2">
+                  {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} Simpan
                 </button>
               </div>
             </form>

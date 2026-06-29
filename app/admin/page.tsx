@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { Banknote, CreditCard, TrendingUp, ShoppingBag, Loader2 } from 'lucide-react';
+import { Banknote, TrendingUp, PackageSearch, AlertTriangle, Loader2, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,12 +14,14 @@ const supabase = createClient(
 export default function AdminDashboard() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  
   const [stats, setStats] = useState({
-    grossSales: 0,
-    netSales: 0,
-    totalTransactions: 0,
-    averageTicket: 0
+    salesToday: 0,
+    totalPiutang: 0,
+    purchasesMonth: 0,
   });
+
+  const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
 
   useEffect(() => {
     // Auth Check
@@ -28,40 +31,56 @@ export default function AdminDashboard() {
       return;
     }
 
-    const fetchStats = async () => {
+    const fetchDashboardData = async () => {
       try {
-        // Ambil transaksi hari ini (sederhana)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const { data, error } = await supabase
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+        // 1. Penjualan Hari Ini
+        const { data: salesData } = await supabase
           .from('transactions')
-          .select('total, subtotal, tax')
-          .gte('created_at', today.toISOString())
-          .eq('status', 'paid');
+          .select('total')
+          .gte('created_at', today.toISOString());
 
-        if (error) throw error;
+        const salesToday = salesData?.reduce((sum, tx) => sum + tx.total, 0) || 0;
 
-        if (data) {
-          const gross = data.reduce((sum, tx) => sum + tx.total, 0);
-          const net = data.reduce((sum, tx) => sum + tx.subtotal, 0);
-          const count = data.length;
+        // 2. Total Piutang Belum Lunas
+        const { data: piutangData } = await supabase
+          .from('transactions')
+          .select('total')
+          .eq('payment_status', 'unpaid');
           
-          setStats({
-            grossSales: gross,
-            netSales: net,
-            totalTransactions: count,
-            averageTicket: count > 0 ? gross / count : 0
-          });
-        }
+        const totalPiutang = piutangData?.reduce((sum, tx) => sum + tx.total, 0) || 0;
+
+        // 3. Pembelian Bulan Ini
+        const { data: purchaseData } = await supabase
+          .from('purchases')
+          .select('total_amount')
+          .gte('created_at', firstDayOfMonth.toISOString());
+          
+        const purchasesMonth = purchaseData?.reduce((sum, p) => sum + p.total_amount, 0) || 0;
+
+        // 4. Produk Stok Menipis (Di bawah 20)
+        const { data: lowStock } = await supabase
+          .from('products')
+          .select('*, units(name)')
+          .lt('stock', 20)
+          .order('stock', { ascending: true })
+          .limit(10);
+
+        setStats({ salesToday, totalPiutang, purchasesMonth });
+        if (lowStock) setLowStockProducts(lowStock);
+
       } catch (err) {
-        console.error('Gagal mengambil data:', err);
+        console.error('Gagal mengambil data dashboard:', err);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchStats();
+    fetchDashboardData();
   }, [router]);
 
   const formatPrice = (price: number) => {
@@ -81,59 +100,114 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full overflow-y-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-800">Dashboard Analitik</h1>
-        <p className="text-slate-500">Ringkasan performa bisnis Anda hari ini.</p>
+        <h1 className="text-2xl font-bold text-slate-800">Dashboard Utama</h1>
+        <p className="text-slate-500">Pantau arus kas, piutang pelanggan, dan peringatan stok gudang.</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-          <div className="flex items-center gap-3 text-slate-500 mb-4">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-              <Banknote size={20} />
-            </div>
-            <span className="font-medium">Penjualan Kotor</span>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group">
+          <div className="absolute -right-6 -top-6 text-blue-50 opacity-50 group-hover:scale-110 transition-transform">
+            <TrendingUp size={120} />
           </div>
-          <div className="text-3xl font-bold text-slate-800">{formatPrice(stats.grossSales)}</div>
-        </div>
-        
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-          <div className="flex items-center gap-3 text-slate-500 mb-4">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+          <div className="flex items-center gap-3 text-slate-600 mb-2 relative z-10">
+            <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
               <TrendingUp size={20} />
             </div>
-            <span className="font-medium">Penjualan Bersih</span>
+            <span className="font-semibold text-sm uppercase tracking-wide">Penjualan Hari Ini</span>
           </div>
-          <div className="text-3xl font-bold text-slate-800">{formatPrice(stats.netSales)}</div>
+          <div className="text-3xl font-black text-slate-800 relative z-10">{formatPrice(stats.salesToday)}</div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group">
+          <div className="absolute -right-6 -top-6 text-amber-50 opacity-50 group-hover:scale-110 transition-transform">
+            <Banknote size={120} />
+          </div>
+          <div className="flex items-center gap-3 text-slate-600 mb-2 relative z-10">
+            <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+              <Banknote size={20} />
+            </div>
+            <span className="font-semibold text-sm uppercase tracking-wide">Piutang Berjalan</span>
+          </div>
+          <div className="text-3xl font-black text-slate-800 relative z-10">{formatPrice(stats.totalPiutang)}</div>
+          <Link href="/admin/receivables" className="relative z-10 mt-3 text-sm text-amber-700 font-medium inline-flex items-center gap-1 hover:gap-2 transition-all">
+            Lihat Detail Piutang <ArrowRight size={14} />
+          </Link>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-          <div className="flex items-center gap-3 text-slate-500 mb-4">
-            <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
-              <ShoppingBag size={20} />
-            </div>
-            <span className="font-medium">Total Transaksi</span>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group">
+          <div className="absolute -right-6 -top-6 text-emerald-50 opacity-50 group-hover:scale-110 transition-transform">
+            <PackageSearch size={120} />
           </div>
-          <div className="text-3xl font-bold text-slate-800">{stats.totalTransactions}</div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-          <div className="flex items-center gap-3 text-slate-500 mb-4">
-            <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
-              <CreditCard size={20} />
+          <div className="flex items-center gap-3 text-slate-600 mb-2 relative z-10">
+            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
+              <PackageSearch size={20} />
             </div>
-            <span className="font-medium">Rata-rata Transaksi</span>
+            <span className="font-semibold text-sm uppercase tracking-wide">Pembelian (Bulan Ini)</span>
           </div>
-          <div className="text-3xl font-bold text-slate-800">{formatPrice(stats.averageTicket)}</div>
+          <div className="text-3xl font-black text-slate-800 relative z-10">{formatPrice(stats.purchasesMonth)}</div>
+          <Link href="/admin/inventory/purchases" className="relative z-10 mt-3 text-sm text-emerald-700 font-medium inline-flex items-center gap-1 hover:gap-2 transition-all">
+            Catat Barang Masuk <ArrowRight size={14} />
+          </Link>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-lg font-bold text-slate-800 mb-4">Aktivitas Terbaru</h2>
-        <div className="h-40 flex items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-          Grafik Tren Penjualan Akan Tampil Di Sini
+      {/* Tabel Peringatan Stok */}
+      <div className="bg-white rounded-2xl shadow-sm border border-red-100 overflow-hidden">
+        <div className="p-5 border-b border-red-100 bg-red-50/50 flex items-center gap-3">
+          <div className="p-2 bg-red-100 text-red-600 rounded-full">
+            <AlertTriangle size={20} />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-red-900">Peringatan Stok Menipis</h2>
+            <p className="text-sm text-red-700">Produk-produk berikut memiliki sisa stok kurang dari 20. Segera lakukan restock ke pabrik!</p>
+          </div>
+        </div>
+        
+        <div className="p-0">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-100">
+              <tr className="text-slate-500 text-sm">
+                <th className="font-medium p-4 pl-6">Nama Produk</th>
+                <th className="font-medium p-4">Kategori</th>
+                <th className="font-medium p-4 text-right">Harga Jual</th>
+                <th className="font-medium p-4 text-center pr-6">Sisa Stok Fisik</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {lowStockProducts.map((prod) => (
+                <tr key={prod.id} className="hover:bg-red-50/30 transition-colors">
+                  <td className="p-4 pl-6 font-semibold text-slate-800">
+                    {prod.name}
+                  </td>
+                  <td className="p-4 text-slate-600 text-sm">
+                    {prod.categories?.name || 'Uncategorized'}
+                  </td>
+                  <td className="p-4 text-right text-slate-600 font-medium">
+                    {formatPrice(prod.price)}
+                  </td>
+                  <td className="p-4 pr-6 text-center">
+                    <span className="inline-flex items-center justify-center min-w-[3rem] px-2 py-1 rounded-md text-sm font-bold bg-red-100 text-red-700 border border-red-200">
+                      {prod.stock || 0}
+                    </span>
+                    <span className="text-xs text-slate-500 ml-1">{prod.units?.name}</span>
+                  </td>
+                </tr>
+              ))}
+              {lowStockProducts.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-slate-500">
+                    <div className="inline-block p-3 bg-emerald-50 text-emerald-500 rounded-full mb-3">
+                      <PackageSearch size={24} />
+                    </div>
+                    <p className="font-medium text-emerald-700">Semua stok produk Anda dalam kondisi aman!</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

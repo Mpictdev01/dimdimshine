@@ -10,9 +10,9 @@ const supabase = createClient(
 export async function processTransaction(payload: any) {
   try {
     const { 
-      shift_id, cashier_id, table_number, order_type, 
+      shift_id, cashier_id, customer_id, order_type, 
       subtotal, tax, service_charge, total, 
-      payment_method, items 
+      payment_method, payment_status, due_date, table_number, items 
     } = payload;
 
     // 1. Create transaction
@@ -21,14 +21,16 @@ export async function processTransaction(payload: any) {
       .insert([{
         shift_id,
         cashier_id,
-        table_number,
+        customer_id: customer_id || null,
         order_type,
         subtotal,
         tax,
         service_charge,
         total,
         payment_method,
-        status: 'paid'
+        payment_status: payment_status || 'paid',
+        due_date: due_date || null,
+        table_number: table_number || null
       }])
       .select()
       .single();
@@ -40,8 +42,7 @@ export async function processTransaction(payload: any) {
       transaction_id: transaction.id,
       product_id: item.productId,
       quantity: item.quantity,
-      price: item.price,
-      modifiers: item.modifiers || null
+      price: item.price
     }));
 
     const { error: itemsError } = await supabase
@@ -50,34 +51,20 @@ export async function processTransaction(payload: any) {
 
     if (itemsError) throw itemsError;
 
-    // 3. Deduct inventory based on BOM (Bill of Materials)
-    // Untuk production, ini sebaiknya dilakukan via Database Function / RPC agar atomik.
-    // Di sini kita gunakan iterasi sederhana untuk demonstrasi.
+    // 3. Deduct inventory (Stok Fisik Distributor)
     for (const item of items) {
-      // Get BOM for product
-      const { data: bomList } = await supabase
-        .from('product_bom')
-        .select('ingredient_id, quantity_required')
-        .eq('product_id', item.productId);
-      
-      if (bomList && bomList.length > 0) {
-        for (const bom of bomList) {
-          const totalRequired = bom.quantity_required * item.quantity;
-          
-          // Dapatkan stok saat ini (idealnya pakai RPC untuk hindari race condition)
-          const { data: ing } = await supabase
-            .from('ingredients')
-            .select('current_stock')
-            .eq('id', bom.ingredient_id)
-            .single();
-            
-          if (ing) {
-            await supabase
-              .from('ingredients')
-              .update({ current_stock: ing.current_stock - totalRequired })
-              .eq('id', bom.ingredient_id);
-          }
-        }
+      // Dapatkan stok saat ini
+      const { data: prod } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', item.productId)
+        .single();
+        
+      if (prod && typeof prod.stock === 'number') {
+        await supabase
+          .from('products')
+          .update({ stock: prod.stock - item.quantity })
+          .eq('id', item.productId);
       }
     }
 

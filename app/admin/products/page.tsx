@@ -14,13 +14,15 @@ const supabase = createClient(
 export default function AdminProducts() {
   const router = useRouter();
   const [products, setProducts] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [formData, setFormData] = useState({ name: '', category: '', price: '', image_url: '' });
+  const [formData, setFormData] = useState({ name: '', category_id: '', price: '', stock: '0', unit_id: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -34,10 +36,16 @@ export default function AdminProducts() {
 
   const fetchProducts = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-    if (!error && data) {
-      setProducts(data);
-    }
+    const [prodRes, unitRes, catRes] = await Promise.all([
+      supabase.from('products').select('*, units(name), categories(name)').order('created_at', { ascending: false }),
+      supabase.from('units').select('*').order('name'),
+      supabase.from('categories').select('*').order('name')
+    ]);
+    
+    if (prodRes.data) setProducts(prodRes.data);
+    if (unitRes.data) setUnits(unitRes.data);
+    if (catRes.data) setCategories(catRes.data);
+    
     setIsLoading(false);
   };
 
@@ -48,7 +56,7 @@ export default function AdminProducts() {
     if (!error) {
       setProducts(products.filter(p => p.id !== id));
     } else {
-      alert('Gagal menghapus produk');
+      alert('Gagal menghapus produk! Pastikan produk ini belum pernah masuk riwayat Penjualan atau Pembelian. \n\nDetail: ' + error.message);
     }
   };
 
@@ -57,13 +65,14 @@ export default function AdminProducts() {
       setEditingProduct(product);
       setFormData({
         name: product.name,
-        category: product.category,
+        category_id: product.category_id || '',
         price: product.price.toString(),
-        image_url: product.image_url || ''
+        stock: (product.stock || 0).toString(),
+        unit_id: product.unit_id || ''
       });
     } else {
       setEditingProduct(null);
-      setFormData({ name: '', category: '', price: '', image_url: '' });
+      setFormData({ name: '', category_id: '', price: '', stock: '0', unit_id: '' });
     }
     setIsModalOpen(true);
   };
@@ -79,9 +88,10 @@ export default function AdminProducts() {
 
     const payload = {
       name: formData.name,
-      category: formData.category,
+      category_id: formData.category_id || null,
       price: parseFloat(formData.price),
-      image_url: formData.image_url || null
+      stock: parseFloat(formData.stock),
+      unit_id: formData.unit_id || null
     };
 
     if (editingProduct) {
@@ -89,7 +99,7 @@ export default function AdminProducts() {
         .from('products')
         .update(payload)
         .eq('id', editingProduct.id)
-        .select()
+        .select('*, units(name), categories(name)')
         .single();
         
       if (!error && data) {
@@ -102,7 +112,7 @@ export default function AdminProducts() {
       const { data, error } = await supabase
         .from('products')
         .insert([payload])
-        .select()
+        .select('*, units(name), categories(name)')
         .single();
         
       if (!error && data) {
@@ -121,7 +131,7 @@ export default function AdminProducts() {
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+    (p.categories?.name && p.categories.name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -167,6 +177,7 @@ export default function AdminProducts() {
                 <tr className="text-slate-500 text-sm border-b border-slate-200">
                   <th className="font-medium p-4 pl-6">Nama Produk</th>
                   <th className="font-medium p-4">Kategori</th>
+                  <th className="font-medium p-4">Stok</th>
                   <th className="font-medium p-4">Harga</th>
                   <th className="font-medium p-4 text-right pr-6">Aksi</th>
                 </tr>
@@ -175,19 +186,17 @@ export default function AdminProducts() {
                 {filteredProducts.map((product) => (
                   <tr key={product.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 pl-6">
-                      <div className="font-semibold text-slate-800 flex items-center gap-3">
-                        {product.image_url ? (
-                          <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-200" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-lg">☕</div>
-                        )}
+                      <div className="font-semibold text-slate-800">
                         {product.name}
                       </div>
                     </td>
                     <td className="p-4">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                        {product.category}
+                        {product.categories?.name || 'Uncategorized'}
                       </span>
+                    </td>
+                    <td className="p-4 font-medium text-slate-700">
+                      {product.stock || 0} {product.units?.name || ''}
                     </td>
                     <td className="p-4 font-medium text-slate-700">
                       {formatPrice(product.price)}
@@ -263,14 +272,16 @@ export default function AdminProducts() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Kategori</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={formData.category}
-                    onChange={e => setFormData({...formData, category: e.target.value})}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors" 
-                    placeholder="Misal: Minuman" 
-                  />
+                  <select 
+                    value={formData.category_id}
+                    onChange={e => setFormData({...formData, category_id: e.target.value})}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors appearance-none" 
+                  >
+                    <option value="">Pilih Kategori</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Harga (Rp)</label>
@@ -285,21 +296,32 @@ export default function AdminProducts() {
                   />
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">URL Gambar (Opsional)</label>
-                <input 
-                  type="url" 
-                  value={formData.image_url}
-                  onChange={e => setFormData({...formData, image_url: e.target.value})}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors" 
-                  placeholder="https://..." 
-                />
-                {formData.image_url && (
-                  <div className="mt-4 p-2 border border-slate-200 rounded-xl w-32 h-32 flex items-center justify-center bg-slate-50">
-                    <img src={formData.image_url} alt="Preview" className="max-w-full max-h-full rounded-lg object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                  </div>
-                )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Stok Fisik</label>
+                  <input 
+                    type="number" 
+                    required
+                    min="0"
+                    step="0.01"
+                    value={formData.stock}
+                    onChange={e => setFormData({...formData, stock: e.target.value})}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Satuan</label>
+                  <select 
+                    value={formData.unit_id}
+                    onChange={e => setFormData({...formData, unit_id: e.target.value})}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors appearance-none" 
+                  >
+                    <option value="">Pilih Satuan</option>
+                    {units.map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 

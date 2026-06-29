@@ -6,8 +6,8 @@ import { createClient } from '@supabase/supabase-js';
 import { usePosStore } from '@/lib/store/usePosStore';
 import ProductCard from '@/app/components/pos/ProductCard';
 import Cart from '@/app/components/pos/Cart';
-import TableMap from '@/app/components/pos/TableMap';
-import { Coffee, Search, Utensils, Hash, Loader2 } from 'lucide-react';
+import CustomerModal from '@/app/components/pos/CustomerModal';
+import { Search, Loader2, LogOut, UserCircle } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,14 +16,13 @@ const supabase = createClient(
 
 export default function PosPage() {
   const router = useRouter();
-  const { currentShift, orderType, activeTable, setOrderType } = usePosStore();
+  const { currentShift, endShift, orderType, activeCustomer, setOrderType } = usePosStore();
   
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>(['Semua']);
   const [activeCategory, setActiveCategory] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [showTableMap, setShowTableMap] = useState(false);
 
   useEffect(() => {
     // Jika tidak ada shift aktif, paksa ke halaman buka shift
@@ -34,13 +33,24 @@ export default function PosPage() {
 
     const fetchProducts = async () => {
       try {
-        const { data, error } = await supabase.from('products').select('*');
-        if (error) throw error;
+        const [prodRes, catRes] = await Promise.all([
+          supabase.from('products').select('*, categories(name), units(name)'),
+          supabase.from('categories').select('name').order('name')
+        ]);
         
-        if (data) {
-          setProducts(data);
-          const uniqueCategories = Array.from(new Set(data.map(p => p.category)));
-          setCategories(['Semua', ...uniqueCategories]);
+        if (prodRes.error) throw prodRes.error;
+        if (catRes.error) throw catRes.error;
+        
+        if (prodRes.data) {
+          setProducts(prodRes.data);
+        }
+        if (catRes.data) {
+          const allCategories = catRes.data.map((c: any) => c.name);
+          // Tambahkan 'Uncategorized' jika ada produk tanpa kategori
+          const hasUncategorized = prodRes.data?.some(p => !p.categories?.name);
+          if (hasUncategorized) allCategories.push('Uncategorized');
+          
+          setCategories(['Semua', ...allCategories]);
         }
       } catch (err) {
         console.error('Failed to fetch products:', err);
@@ -72,8 +82,14 @@ export default function PosPage() {
 
   if (!currentShift) return null; // Akan dialihkan ke /pos/shift
 
+  const handleLogout = () => {
+    endShift();
+    router.push('/pos/shift');
+  };
+
   const filteredProducts = products.filter(p => {
-    const matchCategory = activeCategory === 'Semua' || p.category === activeCategory;
+    const catName = p.categories?.name || 'Uncategorized';
+    const matchCategory = activeCategory === 'Semua' || catName === activeCategory;
     const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchCategory && matchSearch;
   });
@@ -83,50 +99,32 @@ export default function PosPage() {
       {/* Kiri: Katalog Produk */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         
-        {/* Top Controls: Dine In/Takeaway, Search */}
-        <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between gap-4">
-          <div className="flex items-center p-1 bg-slate-100 rounded-xl">
-            <button
-              onClick={() => setOrderType('dine_in')}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
-                orderType === 'dine_in' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Utensils size={16} /> Dine In
-            </button>
-            <button
-              onClick={() => { setOrderType('takeaway'); }}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
-                orderType === 'takeaway' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Coffee size={16} /> Takeaway
-            </button>
-          </div>
-
-          {orderType === 'dine_in' && (
-            <button
-              onClick={() => setShowTableMap(true)}
-              className={`px-4 py-2 rounded-xl font-medium text-sm transition-all flex items-center gap-2 border-2 ${
-                activeTable ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Hash size={16} /> 
-              {activeTable ? activeTable : 'Pilih Meja'}
-            </button>
-          )}
-
-          <div className="flex-1 max-w-md relative">
+        {/* Top Controls: Search & Profil */}
+        <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between gap-6 shrink-0">
+          <div className="flex-1 relative max-w-xl">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <Search size={18} />
             </div>
             <input
               type="text"
-              placeholder="Cari produk..."
+              placeholder="Cari produk (nama / kode)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+              className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm"
             />
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+              <UserCircle size={20} className="text-blue-500" />
+              <span className="font-semibold text-sm">Sales: {currentShift.cashierName}</span>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 font-medium text-sm rounded-xl transition-colors border border-red-100"
+            >
+              <LogOut size={16} /> Keluar
+            </button>
           </div>
         </div>
 
@@ -154,7 +152,7 @@ export default function PosPage() {
               <Loader2 className="animate-spin" size={32} />
             </div>
           ) : filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div className="flex flex-col gap-2">
               {filteredProducts.map(product => (
                 <ProductCard key={product.id} product={product} />
               ))}
@@ -173,9 +171,6 @@ export default function PosPage() {
         <Cart />
       </div>
 
-      {showTableMap && (
-        <TableMap onClose={() => setShowTableMap(false)} />
-      )}
     </div>
   );
 }

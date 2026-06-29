@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePosStore } from '@/lib/store/usePosStore';
 import { processTransaction } from '@/app/actions/transaction';
-import { ArrowLeft, Banknote, CreditCard, QrCode, CheckCircle2, Printer, Loader2 } from 'lucide-react';
+import { ArrowLeft, Banknote, CreditCard, QrCode, CheckCircle2, Printer, Loader2, Clock, FileText } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -14,10 +14,11 @@ const supabase = createClient(
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, currentShift, orderType, activeTable, clearCart, setActiveTable } = usePosStore();
+  const { cart, currentShift, orderType, activeCustomer, notes, setNotes, clearCart, setActiveCustomer } = usePosStore();
   
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris' | 'card'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris' | 'card' | 'tempo'>('cash');
   const [cashGiven, setCashGiven] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [lastTxId, setLastTxId] = useState<string | null>(null);
@@ -31,13 +32,15 @@ export default function CheckoutPage() {
     fetchSettings();
   }, []);
 
-  if (!currentShift) {
-    router.push('/pos/shift');
-    return null;
-  }
+  useEffect(() => {
+    if (!currentShift) {
+      router.push('/pos/shift');
+    } else if (cart.length === 0 && !isSuccess) {
+      router.push('/pos');
+    }
+  }, [currentShift, cart.length, isSuccess, router]);
 
-  if (cart.length === 0 && !isSuccess) {
-    router.push('/pos');
+  if (!currentShift || (cart.length === 0 && !isSuccess)) {
     return null;
   }
 
@@ -61,13 +64,16 @@ export default function CheckoutPage() {
     const payload = {
       shift_id: currentShift.id,
       cashier_id: currentShift.cashierId,
-      table_number: activeTable,
+      customer_id: activeCustomer?.id || null,
       order_type: orderType,
       subtotal,
       tax,
       service_charge: 0,
       total,
       payment_method: paymentMethod,
+      payment_status: paymentMethod === 'tempo' ? 'unpaid' : 'paid',
+      due_date: paymentMethod === 'tempo' && dueDate ? dueDate : null,
+      table_number: notes || null, // Meminjam kolom table_number untuk menyimpan Catatan/Nama Pelanggan Baru
       items: cart
     };
 
@@ -78,7 +84,8 @@ export default function CheckoutPage() {
       setLastTxId(res.transaction?.id);
       setIsSuccess(true);
       clearCart();
-      setActiveTable(null);
+      setActiveCustomer(null);
+      setNotes('');
     } else {
       alert(res.error || 'Terjadi kesalahan saat memproses pembayaran');
     }
@@ -93,8 +100,12 @@ export default function CheckoutPage() {
   };
 
   const handlePrint = () => {
-    // Sesuai permintaan pengguna, mencetak ke PDF secara sederhana
-    // dengan memicu dialog Print bawaan browser.
+    window.print();
+  };
+
+  const handlePrintSuratJalan = () => {
+    // Di aplikasi nyata, ini bisa membuka window popup dengan layout surat jalan khusus
+    alert("Mencetak Surat Jalan (Tanpa Harga)...");
     window.print();
   };
 
@@ -138,13 +149,19 @@ export default function CheckoutPage() {
           <div className="flex flex-col gap-3 print-hidden">
             <button
               onClick={handlePrint}
-              className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-medium py-4 rounded-xl transition-colors shadow-sm"
+              className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-medium py-3 rounded-xl transition-colors shadow-sm"
             >
-              <Printer size={20} /> Cetak Struk (PDF)
+              <Printer size={20} /> Cetak Faktur (PDF)
+            </button>
+            <button
+              onClick={handlePrintSuratJalan}
+              className="w-full flex items-center justify-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-3 rounded-xl transition-colors shadow-sm"
+            >
+              <FileText size={20} /> Cetak Surat Jalan
             </button>
             <button
               onClick={() => router.push('/pos')}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-4 rounded-xl transition-colors"
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3 rounded-xl transition-colors mt-2"
             >
               Pesanan Baru
             </button>
@@ -167,7 +184,10 @@ export default function CheckoutPage() {
           </button>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Detail Pembayaran</h1>
-            <p className="text-sm text-slate-500">{cart.length} item • {orderType === 'dine_in' ? `Dine In (${activeTable})` : 'Takeaway'}</p>
+            <p className="text-sm text-slate-500">
+              {cart.length} item • {orderType === 'delivery' ? 'Kirim' : 'Ambil Sendiri'} 
+              {activeCustomer ? ` • ${activeCustomer.name}` : notes ? ` • Baru: ${notes}` : ''}
+            </p>
           </div>
         </div>
 
@@ -180,11 +200,6 @@ export default function CheckoutPage() {
                 </span>
                 <div>
                   <h3 className="font-semibold text-slate-800">{item.name}</h3>
-                  {item.modifiers && Object.keys(item.modifiers).length > 0 && (
-                    <p className="text-xs text-slate-500 mt-1">
-                      {Object.entries(item.modifiers).map(([k, v]) => `${k}: ${v}`).join(', ')}
-                    </p>
-                  )}
                 </div>
               </div>
               <span className="font-semibold text-slate-800">{formatPrice(item.price * item.quantity)}</span>
@@ -214,33 +229,42 @@ export default function CheckoutPage() {
       <div className="w-1/2 p-8 flex flex-col justify-center max-w-2xl mx-auto">
         <h2 className="text-2xl font-bold text-slate-800 mb-6">Metode Pembayaran</h2>
         
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-4 gap-3 mb-8">
           <button
             onClick={() => setPaymentMethod('cash')}
-            className={`p-6 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
+            className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
               paymentMethod === 'cash' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white hover:border-blue-200 text-slate-600'
             }`}
           >
-            <Banknote size={32} />
-            <span className="font-semibold">Tunai</span>
+            <Banknote size={28} />
+            <span className="font-semibold text-sm">Tunai</span>
           </button>
           <button
             onClick={() => setPaymentMethod('qris')}
-            className={`p-6 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
+            className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
               paymentMethod === 'qris' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white hover:border-blue-200 text-slate-600'
             }`}
           >
-            <QrCode size={32} />
-            <span className="font-semibold">QRIS</span>
+            <QrCode size={28} />
+            <span className="font-semibold text-sm">QRIS</span>
           </button>
           <button
             onClick={() => setPaymentMethod('card')}
-            className={`p-6 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
+            className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
               paymentMethod === 'card' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white hover:border-blue-200 text-slate-600'
             }`}
           >
-            <CreditCard size={32} />
-            <span className="font-semibold">Kartu</span>
+            <CreditCard size={28} />
+            <span className="font-semibold text-sm">Kartu</span>
+          </button>
+          <button
+            onClick={() => setPaymentMethod('tempo')}
+            className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
+              paymentMethod === 'tempo' ? 'border-amber-600 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white hover:border-amber-200 text-slate-600'
+            }`}
+          >
+            <Clock size={28} />
+            <span className="font-semibold text-sm">Tempo</span>
           </button>
         </div>
 
@@ -276,6 +300,22 @@ export default function CheckoutPage() {
                 {change >= 0 ? formatPrice(change) : 'Uang Kurang'}
               </span>
             </div>
+          </div>
+        )}
+
+        {paymentMethod === 'tempo' && (
+          <div className="bg-amber-50 p-6 rounded-3xl border border-amber-200 shadow-sm mb-8 animate-in fade-in slide-in-from-bottom-4">
+            <label className="block text-sm font-semibold text-amber-900 mb-3">Tenggat Waktu / Janji Bayar</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full px-4 py-4 text-xl font-bold text-slate-800 bg-white border-2 border-amber-200 rounded-2xl focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 transition-all"
+            />
+            <p className="text-amber-700 text-sm mt-3 flex gap-2">
+              <Clock size={16} className="mt-0.5 shrink-0"/>
+              Kosongkan jika tenggat waktu bayar fleksibel. Jika diisi, sistem akan menandai faktur ini jatuh tempo pada tanggal yang dipilih.
+            </p>
           </div>
         )}
 

@@ -37,8 +37,37 @@ const menuItems = [
       { name: 'Brands', path: '/admin/products/brands' },
     ]
   },
-  { name: 'Inventaris', icon: Boxes, path: '/admin/inventory' },
-  { name: 'Laporan', icon: FileText, path: '/admin/reports' },
+  { 
+    name: 'INVENTORY (Inventaris)', 
+    icon: Boxes, 
+    path: '/admin/inventory',
+    subItems: [
+      { name: 'Summary', path: '/admin/inventory/summary' },
+      { name: 'Suppliers', path: '/admin/inventory/suppliers' },
+      { name: 'Purchase Order (PO)', path: '/admin/inventory/purchase-order' },
+      { name: 'Transfer', path: '/admin/inventory/transfer' },
+      { name: 'Adjustment', path: '/admin/inventory/adjustment' },
+    ]
+  },
+  { 
+    name: 'Laporan', 
+    icon: FileText, 
+    path: '/admin/reports',
+    subItems: [
+      { name: 'Sales', path: '/admin/reports/sales' },
+      { name: 'Transactions', path: '/admin/reports/transactions' },
+      { name: 'Invoices', path: '/admin/reports/invoices' },
+      { name: 'Shift', path: '/admin/reports/shift' },
+    ]
+  },
+  { 
+    name: 'Customer', 
+    icon: Users, // using Users icon for now
+    path: '/admin/customers',
+    subItems: [
+      { name: 'Customer List', path: '/admin/customers/customer-list' },
+    ]
+  },
   { name: 'Karyawan', icon: Users, path: '/admin/employees' },
   { name: 'Pengaturan', icon: Settings, path: '/admin/settings' },
 ];

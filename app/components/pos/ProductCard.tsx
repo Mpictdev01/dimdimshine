@@ -23,6 +23,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       name: product.name,
       price: product.price,
       quantity: 1,
+      maxStock: product.stock || 0,
     });
   };
 

@@ -8,6 +8,7 @@ export interface CartItem {
   price: number;
   quantity: number;
   unit?: string;
+  maxStock: number;
 }
 
 export interface ShiftInfo {
@@ -51,12 +52,23 @@ export const usePosStore = create<PosState>()(
           (i) => i.productId === item.productId
         );
         if (existingItem) {
+          const newQty = existingItem.quantity + item.quantity;
+          if (newQty > existingItem.maxStock) {
+            alert(`Stok tidak mencukupi! Sisa stok: ${existingItem.maxStock}`);
+            return state;
+          }
           return {
             cart: state.cart.map((i) =>
-              i.id === existingItem.id ? { ...i, quantity: i.quantity + item.quantity } : i
+              i.id === existingItem.id ? { ...i, quantity: newQty } : i
             ),
           };
         }
+        
+        if (item.quantity > item.maxStock) {
+          alert(`Stok tidak mencukupi! Sisa stok: ${item.maxStock}`);
+          return state;
+        }
+
         return { cart: [...state.cart, { ...item, id: crypto.randomUUID() }] };
       }),
 
@@ -64,9 +76,16 @@ export const usePosStore = create<PosState>()(
         cart: state.cart.filter((i) => i.id !== id),
       })),
 
-      updateQuantity: (id, quantity) => set((state) => ({
-        cart: state.cart.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, quantity) } : i)),
-      })),
+      updateQuantity: (id, quantity) => set((state) => {
+        const item = state.cart.find(i => i.id === id);
+        if (item && quantity > item.maxStock) {
+          alert(`Stok tidak mencukupi! Sisa stok: ${item.maxStock}`);
+          return state;
+        }
+        return {
+          cart: state.cart.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, quantity) } : i)),
+        };
+      }),
 
       clearCart: () => set({ cart: [], activeCustomer: null, notes: '', orderType: 'delivery' }),
       

@@ -65,7 +65,7 @@ export default function AdminDashboard() {
         // 4. Produk Stok Menipis (Di bawah 20)
         const { data: lowStock } = await supabase
           .from('products')
-          .select('*, units(name)')
+          .select('*, units(name), categories(name)')
           .lt('stock', 20)
           .order('stock', { ascending: true })
           .limit(10);

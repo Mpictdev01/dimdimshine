@@ -1,13 +1,28 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Download, X } from "lucide-react";
+import { Download, X, Share } from "lucide-react";
 
 export default function InstallPrompt() {
   const [isReadyForInstall, setIsReadyForInstall] = useState(false);
+  const [showIosPrompt, setShowIosPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
+    // Check if already installed
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    if (isStandalone) {
+      return;
+    }
+
+    // iOS Detection
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+    
+    if (isIosDevice) {
+      setShowIosPrompt(true);
+    }
+
     const handleBeforeInstallPrompt = (e: Event) => {
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
@@ -15,12 +30,15 @@ export default function InstallPrompt() {
       setDeferredPrompt(e);
       // Update UI notify the user they can install the PWA
       setIsReadyForInstall(true);
+      // Ensure we don't show both by accident if an iOS browser supports it later
+      setShowIosPrompt(false); 
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     window.addEventListener("appinstalled", () => {
       setIsReadyForInstall(false);
+      setShowIosPrompt(false);
     });
 
     return () => {
@@ -40,7 +58,7 @@ export default function InstallPrompt() {
     setIsReadyForInstall(false);
   }
 
-  if (!isReadyForInstall) return null;
+  if (!isReadyForInstall && !showIosPrompt) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white border border-zinc-200 shadow-2xl rounded-xl p-4 z-50 flex flex-col sm:flex-row items-center gap-4 transition-all duration-500 ease-out transform translate-y-0">
@@ -49,24 +67,37 @@ export default function InstallPrompt() {
         {/* Fallback icon if image fails to load */}
         <Download className="w-8 h-8 text-zinc-900 absolute top-3 left-3 opacity-0" style={{ zIndex: -1 }} />
       </div>
+      
       <div className="flex-1 text-center sm:text-left">
         <h3 className="font-semibold text-zinc-900 text-sm">Install Okax App</h3>
-        <p className="text-xs text-zinc-500 mt-1">Akses lebih cepat dan lancar dari layar beranda Anda.</p>
+        {showIosPrompt ? (
+          <p className="text-xs text-zinc-500 mt-1">
+            Tekan icon <Share className="inline w-3 h-3 mx-1 mb-1 text-blue-500" /> di menu bawah layar Anda, lalu pilih <strong>"Add to Home Screen"</strong>.
+          </p>
+        ) : (
+          <p className="text-xs text-zinc-500 mt-1">Akses lebih cepat dan lancar dari layar beranda Anda.</p>
+        )}
       </div>
+
       <div className="flex items-center gap-2 w-full sm:w-auto mt-3 sm:mt-0">
         <button
-          onClick={() => setIsReadyForInstall(false)}
+          onClick={() => {
+            setIsReadyForInstall(false);
+            setShowIosPrompt(false);
+          }}
           className="p-2 text-zinc-500 hover:bg-zinc-100 rounded-lg flex justify-center items-center"
           aria-label="Tutup"
         >
           <X className="w-4 h-4" />
         </button>
-        <button
-          onClick={downloadApp}
-          className="bg-black text-white px-4 py-2 text-sm rounded-lg font-medium hover:bg-zinc-800 transition-colors flex-1"
-        >
-          Install
-        </button>
+        {!showIosPrompt && (
+          <button
+            onClick={downloadApp}
+            className="bg-black text-white px-4 py-2 text-sm rounded-lg font-medium hover:bg-zinc-800 transition-colors flex-1"
+          >
+            Install
+          </button>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -14,7 +14,9 @@ import {
   ChevronRight,
   LogOut,
   ChevronDown,
-  Banknote
+  Banknote,
+  Menu,
+  X
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
@@ -69,6 +71,11 @@ export default function Sidebar() {
   const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
 
   const handleLogout = () => {
     sessionStorage.removeItem('admin_auth');
@@ -81,23 +88,51 @@ export default function Sidebar() {
   };
 
   return (
-    <div 
-      className={clsx(
-        "bg-slate-900 text-slate-300 flex flex-col h-screen transition-all duration-300 relative",
-        isCollapsed ? "w-20" : "w-64"
-      )}
-    >
-      <div className="h-16 flex items-center justify-center border-b border-slate-800 shrink-0">
-        {!isCollapsed ? (
-          <h1 className="text-xl font-bold text-white tracking-tight">Okax <span className="text-blue-500">Admin</span></h1>
-        ) : (
-          <span className="text-xl font-bold text-white">O<span className="text-blue-500">A</span></span>
-        )}
+    <>
+      <div className="lg:hidden flex items-center justify-between bg-slate-900 text-white h-16 px-4 shrink-0 border-b border-slate-800">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setIsMobileOpen(true)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+            <Menu size={24} />
+          </button>
+          <span className="font-bold text-lg">Okax <span className="text-blue-500">Admin</span></span>
+        </div>
       </div>
+
+      {isMobileOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-slate-900/50 z-40 transition-opacity" 
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      <div 
+        className={clsx(
+          "bg-slate-900 text-slate-300 flex flex-col h-screen transition-all duration-300 z-50 relative",
+          "fixed inset-y-0 left-0 lg:static lg:translate-x-0",
+          isCollapsed ? "lg:w-20" : "lg:w-64",
+          "w-64",
+          isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        )}
+      >
+        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800 shrink-0">
+          <div className="flex items-center justify-center w-full">
+            {!isCollapsed ? (
+              <h1 className="text-xl font-bold text-white tracking-tight">Okax <span className="text-blue-500">Admin</span></h1>
+            ) : (
+              <span className="text-xl font-bold text-white">O<span className="text-blue-500">A</span></span>
+            )}
+          </div>
+          <button 
+            onClick={() => setIsMobileOpen(false)}
+            className="lg:hidden text-slate-400 hover:text-white absolute right-4"
+          >
+            <X size={24} />
+          </button>
+        </div>
 
       <button 
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-20 bg-slate-800 p-1.5 rounded-full border border-slate-700 hover:bg-slate-700 text-white z-10"
+        className="hidden lg:flex absolute -right-3 top-20 bg-slate-800 p-1.5 rounded-full border border-slate-700 hover:bg-slate-700 text-white z-10"
       >
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
@@ -206,5 +241,6 @@ export default function Sidebar() {
         </button>
       </div>
     </div>
+    </>
   );
 }

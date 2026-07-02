@@ -25,8 +25,7 @@ okax-pos/
 ├── app/                        # Direktori utama Next.js (App Router)
 │   ├── actions/                # Server Actions / logika backend khusus
 │   │   ├── purchase.ts         # Logika terkait pembelian (inventory)
-│   │   ├── shift.ts            # Logika terkait buka/tutup kasir (shift)
-│   │   └── transaction.ts      # Logika proses transaksi POS
+│   │   └── transaction.ts      # Logika proses transaksi penjualan
 │   ├── admin/                  # Halaman & Routing untuk Admin Dashboard
 │   │   ├── customers/          # Manajemen pelanggan
 │   │   ├── employees/          # Manajemen karyawan
@@ -43,9 +42,8 @@ okax-pos/
 │   │       ├── Cart.tsx        # Keranjang belanja pelanggan
 │   │       ├── CustomerModal.tsx # Modal pemilihan/input pelanggan
 │   │       └── ProductCard.tsx # Kartu tampilan produk di POS
-│   ├── pos/                    # Halaman & Routing untuk antarmuka Kasir (POS)
-│   │   ├── checkout/           # Halaman/proses pembayaran
-│   │   └── shift/              # Halaman manajemen Shift kasir
+│   ├── pos/                    # Halaman & Routing untuk antarmuka Sales/Penjualan
+│   │   └── checkout/           # Halaman/proses pembayaran pesanan
 │   ├── globals.css             # File styling global (Tailwind)
 │   ├── layout.tsx              # Root layout aplikasi
 │   └── page.tsx                # Halaman utama (Landing/Redirect page)
@@ -62,15 +60,13 @@ okax-pos/
 
 ## 🔄 Alur Aplikasi (App Flow)
 
-Aplikasi terbagi menjadi dua bagian utama yang melayani peran berbeda: **Kasir (POS)** dan **Admin (Dashboard)**.
+Aplikasi terbagi menjadi dua bagian utama yang melayani peran berbeda: **Sales/Penjualan** dan **Admin (Dashboard)**.
 
-### 1. POS (Point of Sale) Flow (`/app/pos`)
-Alur ini digunakan oleh kasir/karyawan saat operasional toko berjalan.
-*   **Mulai Shift**: Kasir masuk dan memulai shift (`/app/pos/shift`) untuk mencatat modal awal.
-*   **Pemilihan Produk**: Halaman utama POS (`/app/pos`) menampilkan daftar produk (`ProductCard.tsx`). Kasir dapat mencari, memilih kategori, dan menambahkan produk ke keranjang (`Cart.tsx`).
-*   **Manajemen Pelanggan**: Jika pembeli adalah member atau berhutang (kasbon), kasir bisa memilih data pelanggan melalui `CustomerModal.tsx`.
-*   **Checkout & Transaksi**: Kasir memproses pembayaran (`/app/pos/checkout`). State pesanan diatur oleh Zustand (`usePosStore.ts`). Data kemudian dikirim menggunakan server actions (`transaction.ts`).
-*   **Akhiri Shift**: Di penghujung hari/jadwal, kasir menutup shift untuk mencocokkan sistem dengan uang fisik.
+### 1. Sales Flow (`/app/pos`)
+Alur ini digunakan oleh staf/tim sales untuk memproses pesanan dan penjualan.
+*   **Pemilihan Produk**: Halaman utama (`/app/pos`) menampilkan daftar produk (`ProductCard.tsx`). Sales dapat mencari, memilih kategori, dan menambahkan produk pesanan ke keranjang (`Cart.tsx`).
+*   **Manajemen Pelanggan**: Sales bisa merekam data pelanggan, memilih member, atau mencatat pembelian piutang/tempo melalui `CustomerModal.tsx`.
+*   **Checkout & Transaksi**: Sales memproses pesanan pelanggan (`/app/pos/checkout`). State pesanan diatur secara lokal oleh Zustand (`usePosStore.ts`), lalu dikirimkan ke database menggunakan server actions (`transaction.ts`).
 
 ### 2. Admin Dashboard Flow (`/app/admin`)
 Alur ini digunakan oleh pemilik toko/manajer untuk mengelola bisnis.
@@ -93,11 +89,11 @@ State ini umumnya menyimpan:
 ### 2. Interaksi Database (Supabase)
 Okax POS menggunakan Supabase. Aplikasi ini mengikuti arsitektur **Server Actions** Next.js (`app/actions/*`). 
 - Baca data ringan/realtime mungkin dilakukan lewat `lib/supabase/client.ts`.
-- Mutasi data penting (Transaksi, Shift, Pembelian) dikirim via *Server Actions* untuk alasan keamanan.
+- Mutasi data penting (Transaksi, Pembelian) dikirim via *Server Actions* untuk alasan keamanan.
 Terdapat file-file `.sql` di root direktori (seperti `supabase_setup.sql`, `inventory_setup.sql`) yang digunakan untuk referensi skema database (Tabel, RLS/Row Level Security, Fungsi, dan Triggers).
 
 ### 3. Dukungan Offline & PWA
-Aplikasi ini sudah dipasang modul `@ducanh2912/next-pwa` dan `idb`. Hal ini menandakan adanya target agar aplikasi Kasir (POS) dapat berjalan dengan lancar sebagai aplikasi mandiri di perangkat mobile/tablet dan dapat menoleransi jaringan yang tidak stabil dengan mekanisme *local storage* menggunakan IndexedDB.
+Aplikasi ini sudah dipasang modul `@ducanh2912/next-pwa` dan `idb`. Hal ini menandakan adanya target agar antarmuka Sales dapat berjalan dengan lancar sebagai aplikasi mandiri di perangkat mobile/tablet dan dapat menoleransi jaringan yang tidak stabil dengan mekanisme *local storage* menggunakan IndexedDB.
 
 ---
 

@@ -131,9 +131,9 @@ export default function AdminSalesReports() {
                     </td>
                     <td className="p-4">
                       {tx.payment_method === 'tempo' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-800">Tempo (Hutang)</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-800">Tempo (Piutang)</span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800">Lunas ({tx.payment_method})</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800">Lunas</span>
                       )}
                     </td>
                     <td className="p-4 text-right font-bold text-slate-800">

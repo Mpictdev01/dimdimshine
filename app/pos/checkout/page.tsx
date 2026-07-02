@@ -16,8 +16,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { cart, currentShift, orderType, activeCustomer, notes, setNotes, clearCart, setActiveCustomer } = usePosStore();
   
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris' | 'card' | 'tempo'>('cash');
-  const [cashGiven, setCashGiven] = useState<string>('');
+  const [paymentMethod, setPaymentMethod] = useState<'lunas' | 'tempo'>('lunas');
   const [dueDate, setDueDate] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -48,16 +47,7 @@ export default function CheckoutPage() {
   const tax = subtotal * (taxRate / 100);
   const total = subtotal + tax;
 
-  const cashAmount = parseFloat(cashGiven || '0');
-  const change = cashAmount - total;
-  const isValidCash = paymentMethod !== 'cash' || cashAmount >= total;
-
-  const handleQuickCash = (amount: number) => {
-    setCashGiven((prev) => (parseFloat(prev || '0') + amount).toString());
-  };
-
   const handleCheckout = async () => {
-    if (paymentMethod === 'cash' && !isValidCash) return;
 
     setIsLoading(true);
 
@@ -111,60 +101,55 @@ export default function CheckoutPage() {
 
   if (isSuccess) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-slate-50 print-bg-white">
-        <div className="bg-white p-10 rounded-3xl shadow-xl max-w-md w-full text-center border border-slate-100 print-no-shadow print-p-0">
-          <div className="mx-auto w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6 print-hidden">
-            <CheckCircle2 size={40} />
+      <div className="flex h-full w-full items-center justify-center bg-slate-100 print-bg-white p-4">
+        <div className="bg-white p-6 sm:p-10 rounded-3xl shadow-2xl max-w-md w-full text-center border border-slate-100 print-no-shadow print-p-0 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-emerald-400 to-teal-500 print-hidden"></div>
+          <div className="mx-auto w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-6 print-hidden shadow-inner ring-8 ring-emerald-50/50">
+            <CheckCircle2 size={48} className="animate-in zoom-in duration-500" />
           </div>
-          <h2 className="text-3xl font-bold text-slate-800 mb-2">Pembayaran Berhasil</h2>
-          <p className="text-slate-500 mb-8 font-mono text-sm">ID: {lastTxId}</p>
+          <h2 className="text-3xl font-extrabold text-slate-800 mb-2 tracking-tight">Pembayaran Berhasil</h2>
+          <p className="text-slate-400 mb-8 font-mono text-sm tracking-wider">TX ID: {lastTxId}</p>
 
-          <div className="bg-slate-50 p-6 rounded-2xl mb-8 text-left border border-slate-100 print-border-black print-bg-white">
-            <h3 className="font-bold text-lg mb-4 pb-2 border-b border-slate-200">Struk Pesanan</h3>
-            <div className="space-y-3 font-mono text-sm mb-4">
-              {/* Ini hanya preview struk ringan */}
-              <div className="flex justify-between text-slate-500">
-                <span>Metode</span>
-                <span className="uppercase font-semibold text-slate-800">{paymentMethod}</span>
-              </div>
+          <div className="bg-slate-50/80 p-6 rounded-2xl mb-8 text-left border border-slate-100 print-border-black print-bg-white relative">
+            {/* Perforated edge effect */}
+            <div className="absolute -top-3 left-0 w-full flex justify-between px-2 print-hidden opacity-30">
+              {[...Array(12)].map((_, i) => <div key={i} className="w-3 h-3 rounded-full bg-white shadow-sm"></div>)}
+            </div>
+            
+            <h3 className="font-bold text-lg mb-4 pb-3 border-b border-dashed border-slate-300 text-slate-700 flex justify-between items-end">
+              Struk Pesanan
+              <span className="text-xs font-normal text-slate-400 uppercase tracking-wider">{paymentMethod}</span>
+            </h3>
+            
+            <div className="space-y-3 text-sm mb-4">
               <div className="flex justify-between text-slate-500">
                 <span>Total Tagihan</span>
                 <span className="font-semibold text-slate-800">{formatPrice(total)}</span>
               </div>
-              {paymentMethod === 'cash' && (
-                <>
-                  <div className="flex justify-between text-slate-500">
-                    <span>Tunai</span>
-                    <span>{formatPrice(cashAmount)}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-slate-800 pt-2 border-t border-dashed border-slate-300">
-                    <span>Kembalian</span>
-                    <span>{formatPrice(change)}</span>
-                  </div>
-                </>
-              )}
             </div>
           </div>
 
           <div className="flex flex-col gap-3 print-hidden">
             <button
               onClick={handlePrint}
-              className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-medium py-3 rounded-xl transition-colors shadow-sm"
+              className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3.5 rounded-xl transition-all shadow-md active:scale-[0.98]"
             >
-              <Printer size={20} /> Cetak Faktur (PDF)
+              <Printer size={20} /> Cetak Struk
             </button>
-            <button
-              onClick={handlePrintSuratJalan}
-              className="w-full flex items-center justify-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-3 rounded-xl transition-colors shadow-sm"
-            >
-              <FileText size={20} /> Cetak Surat Jalan
-            </button>
-            <button
-              onClick={() => router.push('/pos')}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3 rounded-xl transition-colors mt-2"
-            >
-              Pesanan Baru
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handlePrintSuratJalan}
+                className="w-full flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3.5 rounded-xl transition-all active:scale-[0.98]"
+              >
+                <FileText size={18} /> Surat Jalan
+              </button>
+              <button
+                onClick={() => router.push('/pos')}
+                className="w-full flex items-center justify-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-3.5 rounded-xl transition-all active:scale-[0.98]"
+              >
+                Selesai
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -172,161 +157,126 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="flex h-full w-full bg-slate-50">
-      {/* Left: Summary */}
-      <div className="w-1/2 bg-white border-r border-slate-200 flex flex-col">
-        <div className="p-6 border-b border-slate-100 flex items-center gap-4 bg-slate-50">
+    <div className="h-full w-full overflow-y-auto bg-slate-50 custom-scrollbar">
+      <div className="flex flex-col lg:flex-row min-h-full w-full">
+        {/* Left: Summary */}
+        <div className="w-full lg:w-[45%] bg-slate-900 border-b lg:border-b-0 lg:border-r border-slate-800 text-slate-200 flex flex-col">
+          <div className="p-6 border-b border-slate-800/60 flex items-center gap-4 bg-slate-900/95 sticky top-0 z-10 backdrop-blur-md shadow-sm">
           <button 
             onClick={() => router.push('/pos')}
-            className="w-10 h-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-100"
+            className="w-10 h-10 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">Detail Pembayaran</h1>
-            <p className="text-sm text-slate-500">
-              {cart.length} item • {orderType === 'delivery' ? 'Kirim' : 'Ambil Sendiri'} 
-              {activeCustomer ? ` • ${activeCustomer.name}` : notes ? ` • Baru: ${notes}` : ''}
+            <h1 className="text-xl font-bold text-white tracking-tight">Detail Pembayaran</h1>
+            <p className="text-sm text-slate-400 mt-0.5">
+              <span className="inline-flex items-center justify-center bg-slate-800 px-2 py-0.5 rounded text-xs font-medium mr-2">{orderType === 'delivery' ? 'Kirim' : 'Ambil Sendiri'}</span>
+              {cart.length} item {activeCustomer ? ` • ${activeCustomer.name}` : notes ? ` • Baru: ${notes}` : ''}
             </p>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+        <div className="p-6 space-y-3 bg-slate-900 flex-1">
           {cart.map(item => (
-            <div key={item.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100">
+            <div key={item.id} className="flex justify-between items-center bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
               <div className="flex gap-4 items-center">
-                <span className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center font-bold text-slate-600 text-sm">
-                  {item.quantity}x
+                <span className="w-9 h-9 bg-slate-700 text-white rounded-xl flex items-center justify-center font-bold text-sm shadow-inner shrink-0">
+                  {item.quantity}
                 </span>
                 <div>
-                  <h3 className="font-semibold text-slate-800">{item.name}</h3>
+                  <h3 className="font-semibold text-white">{item.name}</h3>
+                  <p className="text-slate-400 text-xs mt-0.5">{formatPrice(item.price)} per unit</p>
                 </div>
               </div>
-              <span className="font-semibold text-slate-800">{formatPrice(item.price * item.quantity)}</span>
+              <span className="font-semibold text-white ml-2 shrink-0">{formatPrice(item.price * item.quantity)}</span>
             </div>
           ))}
         </div>
 
-        <div className="p-6 bg-slate-800 text-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
-          <div className="space-y-3 mb-6">
-            <div className="flex justify-between text-slate-300">
+        <div className="p-6 sm:p-8 bg-slate-950 border-t border-slate-800 sticky bottom-0 z-10">
+          <div className="space-y-4 mb-6 text-sm">
+            <div className="flex justify-between text-slate-400">
               <span>Subtotal</span>
-              <span>{formatPrice(subtotal)}</span>
+              <span className="text-slate-300">{formatPrice(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-slate-300">
+            <div className="flex justify-between text-slate-400">
               <span>Pajak ({taxRate}%)</span>
-              <span>{formatPrice(tax)}</span>
+              <span className="text-slate-300">{formatPrice(tax)}</span>
             </div>
           </div>
-          <div className="flex justify-between text-2xl font-bold">
-            <span>Total Bayar</span>
-            <span className="text-emerald-400">{formatPrice(total)}</span>
+          <div className="flex justify-between items-end pt-4 border-t border-slate-800/80">
+            <span className="text-slate-400 font-medium mb-1">Total Tagihan</span>
+            <span className="text-3xl font-extrabold text-emerald-400 tracking-tight">{formatPrice(total)}</span>
           </div>
         </div>
       </div>
 
       {/* Right: Payment Method */}
-      <div className="w-1/2 p-8 flex flex-col justify-center max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold text-slate-800 mb-6">Metode Pembayaran</h2>
-        
-        <div className="grid grid-cols-4 gap-3 mb-8">
-          <button
-            onClick={() => setPaymentMethod('cash')}
-            className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
-              paymentMethod === 'cash' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white hover:border-blue-200 text-slate-600'
-            }`}
-          >
-            <Banknote size={28} />
-            <span className="font-semibold text-sm">Tunai</span>
-          </button>
-          <button
-            onClick={() => setPaymentMethod('qris')}
-            className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
-              paymentMethod === 'qris' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white hover:border-blue-200 text-slate-600'
-            }`}
-          >
-            <QrCode size={28} />
-            <span className="font-semibold text-sm">QRIS</span>
-          </button>
-          <button
-            onClick={() => setPaymentMethod('card')}
-            className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
-              paymentMethod === 'card' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white hover:border-blue-200 text-slate-600'
-            }`}
-          >
-            <CreditCard size={28} />
-            <span className="font-semibold text-sm">Kartu</span>
-          </button>
-          <button
-            onClick={() => setPaymentMethod('tempo')}
-            className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all ${
-              paymentMethod === 'tempo' ? 'border-amber-600 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white hover:border-amber-200 text-slate-600'
-            }`}
-          >
-            <Clock size={28} />
-            <span className="font-semibold text-sm">Tempo</span>
-          </button>
-        </div>
-
-        {paymentMethod === 'cash' && (
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mb-8 animate-in fade-in slide-in-from-bottom-4">
-            <label className="block text-sm font-semibold text-slate-700 mb-3">Nominal Uang Diterima</label>
-            <div className="relative mb-6">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xl">Rp</span>
-              <input
-                type="number"
-                value={cashGiven}
-                onChange={(e) => setCashGiven(e.target.value)}
-                className="w-full pl-14 pr-4 py-4 text-2xl font-bold text-slate-800 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all"
-                placeholder="0"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 gap-3 mb-6">
-              {[10000, 20000, 50000, 100000].map(amt => (
-                <button
-                  key={amt}
-                  onClick={() => handleQuickCash(amt)}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-3 rounded-xl transition-colors"
-                >
-                  +{amt / 1000}k
-                </button>
-              ))}
-            </div>
-
-            <div className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <span className="font-medium text-slate-500">Kembalian</span>
-              <span className={`text-2xl font-bold ${change >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                {change >= 0 ? formatPrice(change) : 'Uang Kurang'}
-              </span>
-            </div>
+      <div className="w-full lg:w-[55%] bg-white flex flex-col">
+        <div className="p-6 sm:p-8 lg:p-12 max-w-3xl mx-auto w-full flex-1 flex flex-col">
+          <h2 className="text-2xl font-bold text-slate-800 mb-6 tracking-tight">Pilih Metode Pembayaran</h2>
+          
+          <div className="grid grid-cols-2 gap-4 mb-10">
+            <button
+              onClick={() => setPaymentMethod('lunas')}
+              className={`p-5 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all duration-200 ${
+                paymentMethod === 'lunas' 
+                  ? 'border-blue-600 bg-blue-50/50 text-blue-700 shadow-md shadow-blue-100' 
+                  : 'border-slate-100 bg-white hover:border-blue-200 hover:bg-slate-50 text-slate-500'
+              }`}
+            >
+              <CheckCircle2 size={32} strokeWidth={paymentMethod === 'lunas' ? 2.5 : 2} />
+              <span className="font-semibold text-sm">Lunas</span>
+            </button>
+            <button
+              onClick={() => setPaymentMethod('tempo')}
+              className={`p-5 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all duration-200 ${
+                paymentMethod === 'tempo' 
+                  ? 'border-amber-500 bg-amber-50/50 text-amber-700 shadow-md shadow-amber-100' 
+                  : 'border-slate-100 bg-white hover:border-amber-200 hover:bg-slate-50 text-slate-500'
+              }`}
+            >
+              <Clock size={32} strokeWidth={paymentMethod === 'tempo' ? 2.5 : 2} />
+              <span className="font-semibold text-sm text-center">Tempo<br className="hidden sm:block"/>(Piutang)</span>
+            </button>
           </div>
-        )}
 
-        {paymentMethod === 'tempo' && (
-          <div className="bg-amber-50 p-6 rounded-3xl border border-amber-200 shadow-sm mb-8 animate-in fade-in slide-in-from-bottom-4">
-            <label className="block text-sm font-semibold text-amber-900 mb-3">Tenggat Waktu / Janji Bayar</label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-4 py-4 text-xl font-bold text-slate-800 bg-white border-2 border-amber-200 rounded-2xl focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 transition-all"
-            />
-            <p className="text-amber-700 text-sm mt-3 flex gap-2">
-              <Clock size={16} className="mt-0.5 shrink-0"/>
-              Kosongkan jika tenggat waktu bayar fleksibel. Jika diisi, sistem akan menandai faktur ini jatuh tempo pada tanggal yang dipilih.
+
+
+          {paymentMethod === 'tempo' && (
+            <div className="bg-amber-50/50 p-6 sm:p-8 rounded-3xl border border-amber-100 shadow-sm mb-10 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <label className="block text-sm font-semibold text-amber-900 mb-4">Tenggat Waktu / Janji Bayar (Opsional)</label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full px-6 py-5 text-xl font-bold text-slate-800 bg-white border-2 border-amber-200 rounded-2xl focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all shadow-sm"
+              />
+              <div className="mt-4 flex gap-3 p-4 bg-amber-100/50 rounded-xl text-amber-800">
+                <Clock size={20} className="shrink-0 text-amber-600"/>
+                <p className="text-sm leading-relaxed">
+                  Kosongkan jika tenggat waktu bayar fleksibel. Jika diisi, sistem akan otomatis menandai faktur ini jatuh tempo pada tanggal yang dipilih.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-auto pt-8">
+            <button
+              onClick={handleCheckout}
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-5 rounded-2xl text-xl shadow-xl shadow-blue-600/20 active:scale-[0.98] transition-all disabled:shadow-none"
+            >
+              {isLoading ? <Loader2 className="animate-spin" size={28} /> : 'Proses Pembayaran'}
+            </button>
+            <p className="text-center text-slate-400 text-sm mt-4 pb-8 lg:pb-0">
+              Pastikan data pesanan dan nominal sudah sesuai sebelum memproses.
             </p>
           </div>
-        )}
-
-        <button
-          onClick={handleCheckout}
-          disabled={isLoading || (paymentMethod === 'cash' && !isValidCash)}
-          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold py-5 rounded-2xl text-lg shadow-lg shadow-blue-600/30 active:scale-[0.98] transition-all"
-        >
-          {isLoading ? <Loader2 className="animate-spin" size={24} /> : 'Proses Pembayaran'}
-        </button>
+        </div>
       </div>
     </div>
+  </div>
   );
 }

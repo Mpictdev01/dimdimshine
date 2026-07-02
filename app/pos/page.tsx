@@ -182,14 +182,16 @@ export default function PosPage() {
         fixed inset-y-0 right-0 z-50 w-[85%] sm:w-[380px] transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 bg-white
         ${showMobileCart ? 'translate-x-0' : 'translate-x-full'}
       `}>
-        <div className="absolute top-4 left-[-48px] lg:hidden">
-          <button 
-            onClick={() => setShowMobileCart(false)} 
-            className="bg-white text-slate-800 p-2 rounded-l-xl shadow-[-4px_0_10px_rgba(0,0,0,0.1)] border-y border-l border-slate-200 flex items-center justify-center"
-          >
-            <X size={24} />
-          </button>
-        </div>
+        {showMobileCart && (
+          <div className="absolute top-4 left-[-48px] lg:hidden">
+            <button 
+              onClick={() => setShowMobileCart(false)} 
+              className="bg-white text-slate-800 p-2 rounded-l-xl shadow-[-4px_0_10px_rgba(0,0,0,0.1)] border-y border-l border-slate-200 flex items-center justify-center"
+            >
+              <X size={24} />
+            </button>
+          </div>
+        )}
         <Cart />
       </div>
 

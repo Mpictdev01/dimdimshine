@@ -58,6 +58,7 @@ const menuItems = [
     path: '/admin/reports',
     subItems: [
       { name: 'Riwayat Penjualan', path: '/admin/reports/sales' },
+      { name: 'Rekap Penjualan', path: '/admin/reports/recap' },
       { name: 'Laporan Stok', path: '/admin/reports/stock' },
     ]
   },

@@ -61,10 +61,10 @@ export async function createPurchase(
       
       const newStock = (product.stock || 0) + item.qty;
       
-      // Update stock
+      // Update stock & cost price
       const { error: updateError } = await supabase
         .from('products')
-        .update({ stock: newStock })
+        .update({ stock: newStock, cost_price: item.buy_price })
         .eq('id', item.product_id);
         
       if (updateError) throw updateError;

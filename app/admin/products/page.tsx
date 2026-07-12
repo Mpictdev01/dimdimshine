@@ -19,10 +19,13 @@ export default function AdminProducts() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Selection State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [formData, setFormData] = useState({ name: '', category_id: '', price: '', stock: '0', unit_id: '' });
+  const [formData, setFormData] = useState({ name: '', category_id: '', price: '', unit_id: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -49,14 +52,43 @@ export default function AdminProducts() {
     setIsLoading(false);
   };
 
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(filteredProducts.map(p => p.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelect = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(itemId => itemId !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Apakah Anda yakin ingin menghapus produk ini?')) return;
     
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (!error) {
       setProducts(products.filter(p => p.id !== id));
+      setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
     } else {
       alert('Gagal menghapus produk! Pastikan produk ini belum pernah masuk riwayat Penjualan atau Pembelian. \n\nDetail: ' + error.message);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} produk terpilih?`)) return;
+    
+    const { error } = await supabase.from('products').delete().in('id', selectedIds);
+    if (!error) {
+      setProducts(products.filter(p => !selectedIds.includes(p.id)));
+      setSelectedIds([]);
+    } else {
+      alert('Gagal menghapus beberapa produk. Pastikan produk tersebut belum ada riwayat transaksinya. \n\nDetail: ' + error.message);
     }
   };
 
@@ -67,12 +99,11 @@ export default function AdminProducts() {
         name: product.name,
         category_id: product.category_id || '',
         price: product.price.toString(),
-        stock: (product.stock || 0).toString(),
         unit_id: product.unit_id || ''
       });
     } else {
       setEditingProduct(null);
-      setFormData({ name: '', category_id: '', price: '', stock: '0', unit_id: '' });
+      setFormData({ name: '', category_id: '', price: '', unit_id: '' });
     }
     setIsModalOpen(true);
   };
@@ -86,18 +117,17 @@ export default function AdminProducts() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const payload = {
+    const basePayload = {
       name: formData.name,
       category_id: formData.category_id || null,
       price: parseFloat(formData.price),
-      stock: parseFloat(formData.stock),
       unit_id: formData.unit_id || null
     };
 
     if (editingProduct) {
       const { data, error } = await supabase
         .from('products')
-        .update(payload)
+        .update(basePayload)
         .eq('id', editingProduct.id)
         .select('*, units(name), categories(name)')
         .single();
@@ -109,9 +139,15 @@ export default function AdminProducts() {
         alert('Gagal memperbarui produk');
       }
     } else {
+      const insertPayload = {
+        ...basePayload,
+        stock: 0,
+        cost_price: 0
+      };
+      
       const { data, error } = await supabase
         .from('products')
-        .insert([payload])
+        .insert([insertPayload])
         .select('*, units(name), categories(name)')
         .single();
         
@@ -175,7 +211,15 @@ export default function AdminProducts() {
             <table className="w-full text-left border-collapse">
               <thead className="sticky top-0 bg-white shadow-sm z-10">
                 <tr className="text-slate-500 text-sm border-b border-slate-200">
-                  <th className="font-medium p-4 pl-6">Nama Produk</th>
+                  <th className="font-medium p-4 pl-6 w-12">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                      onChange={handleSelectAll}
+                      checked={filteredProducts.length > 0 && selectedIds.length === filteredProducts.length}
+                    />
+                  </th>
+                  <th className="font-medium p-4">Nama Produk</th>
                   <th className="font-medium p-4">Kategori</th>
                   <th className="font-medium p-4">Stok</th>
                   <th className="font-medium p-4">Harga</th>
@@ -186,6 +230,14 @@ export default function AdminProducts() {
                 {filteredProducts.map((product) => (
                   <tr key={product.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 pl-6">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                        checked={selectedIds.includes(product.id)}
+                        onChange={() => handleSelect(product.id)}
+                      />
+                    </td>
+                    <td className="p-4">
                       <div className="font-semibold text-slate-800">
                         {product.name}
                       </div>
@@ -222,7 +274,7 @@ export default function AdminProducts() {
                 
                 {filteredProducts.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-500">
+                    <td colSpan={5} className="p-8 text-center text-slate-500">
                       Tidak ada produk yang ditemukan.
                     </td>
                   </tr>
@@ -232,6 +284,26 @@ export default function AdminProducts() {
           )}
         </div>
       </div>
+
+      {/* Floating Action Bar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 z-50 animate-in slide-in-from-bottom-10">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-500/20 text-blue-400 w-8 h-8 rounded-full flex items-center justify-center font-bold">
+              {selectedIds.length}
+            </div>
+            <span className="font-medium">Produk Terpilih</span>
+          </div>
+          <div className="w-px h-8 bg-slate-700"></div>
+          <button 
+            onClick={handleBulkDelete}
+            className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-xl font-semibold flex items-center gap-2 transition-colors shadow-sm"
+          >
+            <Trash2 size={18} />
+            Hapus Terpilih
+          </button>
+        </div>
+      )}
 
       {/* Full Page Modal (Overlay) */}
       <div 
@@ -284,44 +356,31 @@ export default function AdminProducts() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Harga (Rp)</label>
-                  <input 
-                    type="number" 
-                    required
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Harga Jual (Rp)</label>
+                  <input
+                    type="number"
                     min="0"
+                    required
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors"
                     value={formData.price}
-                    onChange={e => setFormData({...formData, price: e.target.value})}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors" 
-                    placeholder="25000" 
+                    onChange={(e) => setFormData({...formData, price: e.target.value})}
+                    placeholder="25000"
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Stok Fisik</label>
-                  <input 
-                    type="number" 
-                    required
-                    min="0"
-                    step="0.01"
-                    value={formData.stock}
-                    onChange={e => setFormData({...formData, stock: e.target.value})}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Satuan</label>
-                  <select 
-                    value={formData.unit_id}
-                    onChange={e => setFormData({...formData, unit_id: e.target.value})}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors appearance-none" 
-                  >
-                    <option value="">Pilih Satuan</option>
-                    {units.map(u => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
-                </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Satuan</label>
+                <select 
+                  value={formData.unit_id}
+                  onChange={e => setFormData({...formData, unit_id: e.target.value})}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors appearance-none" 
+                >
+                  <option value="">Pilih Satuan</option>
+                  {units.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Loader2, Search, Download, Filter, FileSpreadsheet } from 'lucide-react';
+import { Loader2, Search, Download, Filter, FileSpreadsheet, Trash2, X, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { deleteTransactions } from '@/app/actions/transaction';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,10 +16,15 @@ export default function RecapReportPage() {
   const [filteredTx, setFilteredTx] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Master data for filters
   const [users, setUsers] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+
+  // Deletion States
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [revertStock, setRevertStock] = useState(true);
 
   // Filter States
   const [startDate, setStartDate] = useState('');
@@ -102,6 +108,7 @@ export default function RecapReportPage() {
     }
 
     setFilteredTx(filtered);
+    setSelectedIds([]); // Reset selection when filter changes
   };
 
   const formatPrice = (price: number) => {
@@ -133,7 +140,7 @@ export default function RecapReportPage() {
         'Subtotal': tx.subtotal,
         'Pajak': tx.tax || 0,
         'Total Nominal': tx.total,
-        'Status Pembayaran': tx.payment_method === 'tempo' ? 'Piutang/Tempo' : 'Lunas'
+        'Status Pembayaran': tx.payment_status === 'unpaid' ? 'Piutang/Tempo' : 'Lunas'
       };
     });
 
@@ -149,6 +156,36 @@ export default function RecapReportPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Penjualan");
     
     XLSX.writeFile(workbook, `Rekap_Penjualan_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(filteredTx.map(tx => tx.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setIsDeleting(true);
+
+    const res = await deleteTransactions(selectedIds, revertStock);
+    if (res.success) {
+      setSelectedIds([]);
+      setShowDeleteModal(false);
+      await fetchTransactions(); // Refresh data
+    } else {
+      alert(`Error: ${res.error}`);
+    }
+
+    setIsDeleting(false);
   };
 
   return (
@@ -234,7 +271,15 @@ export default function RecapReportPage() {
             <table className="w-full text-left border-collapse">
               <thead className="sticky top-0 bg-white shadow-sm z-10">
                 <tr className="text-slate-500 text-sm border-b border-slate-200">
-                  <th className="font-medium p-4 pl-6">Tgl & Jam</th>
+                  <th className="font-medium p-4 pl-6 w-10">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={filteredTx.length > 0 && selectedIds.length === filteredTx.length}
+                      onChange={handleSelectAll}
+                    />
+                  </th>
+                  <th className="font-medium p-4">Tgl & Jam</th>
                   <th className="font-medium p-4">ID Transaksi</th>
                   <th className="font-medium p-4">Pelanggan</th>
                   <th className="font-medium p-4">Sales</th>
@@ -244,8 +289,16 @@ export default function RecapReportPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
                 {filteredTx.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 pl-6 text-slate-600 font-medium whitespace-nowrap">
+                  <tr key={tx.id} className={`hover:bg-slate-50/50 transition-colors ${selectedIds.includes(tx.id) ? 'bg-blue-50/30' : ''}`}>
+                    <td className="p-4 pl-6">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        checked={selectedIds.includes(tx.id)}
+                        onChange={() => handleSelectOne(tx.id)}
+                      />
+                    </td>
+                    <td className="p-4 text-slate-600 font-medium whitespace-nowrap">
                       {new Date(tx.created_at).toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute:'2-digit'})}
                     </td>
                     <td className="p-4 text-slate-500 font-mono text-xs">
@@ -253,7 +306,7 @@ export default function RecapReportPage() {
                     </td>
                     <td className="p-4 font-semibold text-slate-800">
                       {tx.customers?.name || 'Pelanggan Umum'}
-                      {tx.payment_method === 'tempo' && (
+                      {tx.payment_status === 'unpaid' && (
                         <span className="block mt-1 text-[10px] font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded w-max">Tempo</span>
                       )}
                     </td>
@@ -276,7 +329,7 @@ export default function RecapReportPage() {
                 ))}
                 {filteredTx.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500">
+                    <td colSpan={7} className="p-8 text-center text-slate-500">
                       Tidak ada data yang sesuai dengan filter.
                     </td>
                   </tr>
@@ -288,14 +341,103 @@ export default function RecapReportPage() {
         
         {/* Footer Summary */}
         {!isLoading && filteredTx.length > 0 && (
-          <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center shrink-0">
-            <span className="text-sm font-medium text-slate-600">Total Transaksi: <strong className="text-slate-900">{filteredTx.length}</strong></span>
-            <span className="text-lg font-bold text-slate-900">
-              Total Omzet: {formatPrice(filteredTx.reduce((sum, tx) => sum + (tx.total || 0), 0))}
-            </span>
+          <div className="p-4 bg-slate-800 border-t border-slate-700 flex flex-col md:flex-row justify-between items-center shrink-0 text-white rounded-b-2xl shadow-inner">
+            <div className="flex gap-6 mb-4 md:mb-0 items-center">
+              <div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Transaksi</div>
+                <div className="text-lg font-bold text-white">{filteredTx.length} Nota</div>
+              </div>
+              <div className="w-px h-8 bg-slate-700"></div>
+              <div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Barang Terjual</div>
+                <div className="text-lg font-bold text-blue-400">
+                  {filteredTx.reduce((sum, tx) => sum + (tx.transaction_items?.reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0) || 0), 0)} Item
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Omzet Bersih</div>
+              <div className="text-xl font-black text-emerald-400">
+                {formatPrice(filteredTx.reduce((sum, tx) => sum + (tx.total || 0), 0))}
+              </div>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Floating Action Bar for Deletion */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 z-50 animate-in slide-in-from-bottom-10">
+          <div className="flex items-center gap-3 border-r border-slate-700 pr-6">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-xs font-bold">
+              {selectedIds.length}
+            </span>
+            <span className="font-medium">Transaksi Terpilih</span>
+          </div>
+          <button 
+            onClick={() => setShowDeleteModal(true)}
+            className="flex items-center gap-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 px-3 py-1.5 rounded-lg transition-colors font-medium text-sm"
+          >
+            <Trash2 size={16} /> Hapus Terpilih
+          </button>
+          <button 
+            onClick={() => setSelectedIds([])}
+            className="text-slate-400 hover:text-white p-1 rounded-md transition-colors ml-2"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
+                <AlertTriangle size={24} />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">Hapus {selectedIds.length} Transaksi?</h2>
+              <p className="text-slate-500 text-sm mb-6">
+                Tindakan ini akan menghapus nota transaksi beserta seluruh riwayat penjualan di dalamnya.
+              </p>
+
+              <label className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={revertStock}
+                  onChange={e => setRevertStock(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <div className="font-semibold text-slate-700 text-sm">Kembalikan stok produk?</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Stok barang yang ada di dalam nota tersebut akan ditambahkan kembali secara otomatis ke gudang/master produk. (Direkomendasikan)
+                  </div>
+                </div>
+              </label>
+            </div>
+            
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-xl transition-colors text-sm"
+                disabled={isDeleting}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50 text-sm shadow-sm"
+              >
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                Ya, Hapus Permanen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

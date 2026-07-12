@@ -54,13 +54,13 @@ export default function CheckoutPage() {
     const payload = {
       shift_id: currentShift.id,
       cashier_id: currentShift.cashierId,
-      customer_id: activeCustomer?.id || null,
+      customer_id: activeCustomer?.id === 'new-customer' ? null : (activeCustomer?.id || null),
       order_type: orderType,
       subtotal,
       tax,
       service_charge: 0,
       total,
-      payment_method: paymentMethod,
+      payment_method: 'cash', // Selalu set ke cash/tunai untuk menghindari error constraint, bedakan dari status
       payment_status: paymentMethod === 'tempo' ? 'unpaid' : 'paid',
       due_date: paymentMethod === 'tempo' && dueDate ? dueDate : null,
       table_number: notes || null, // Meminjam kolom table_number untuk menyimpan Catatan/Nama Pelanggan Baru

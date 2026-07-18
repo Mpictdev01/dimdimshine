@@ -8,9 +8,11 @@ const supabase = createClient(
 );
 
 interface PurchaseItemPayload {
-  product_id: string;
+  product_id?: string;
+  ingredient_id?: string;
   qty: number;
   buy_price: number;
+  type: 'product' | 'ingredient';
 }
 
 export async function createPurchase(
@@ -36,7 +38,8 @@ export async function createPurchase(
     // 2. Insert Purchase Items
     const purchaseItems = items.map(item => ({
       purchase_id: purchase.id,
-      product_id: item.product_id,
+      product_id: item.type === 'product' ? item.product_id : null,
+      ingredient_id: item.type === 'ingredient' ? item.ingredient_id : null,
       qty: item.qty,
       buy_price: item.buy_price
     }));
@@ -47,27 +50,47 @@ export async function createPurchase(
 
     if (itemsError) throw itemsError;
 
-    // 3. Update Product Stocks
-    // Since we don't have an RPC function for adding stock yet, we'll do it sequentially
+    // 3. Update Stocks sequentially
     for (const item of items) {
-      // Get current stock
-      const { data: product, error: fetchError } = await supabase
-        .from('products')
-        .select('stock')
-        .eq('id', item.product_id)
-        .single();
+      if (item.type === 'product' && item.product_id) {
+        const { data: product, error: fetchError } = await supabase
+          .from('products')
+          .select('stock')
+          .eq('id', item.product_id)
+          .single();
+          
+        if (fetchError) throw fetchError;
         
-      if (fetchError) throw fetchError;
-      
-      const newStock = (product.stock || 0) + item.qty;
-      
-      // Update stock & cost price
-      const { error: updateError } = await supabase
-        .from('products')
-        .update({ stock: newStock, cost_price: item.buy_price })
-        .eq('id', item.product_id);
+        const newStock = (product.stock || 0) + item.qty;
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({ stock: newStock, cost_price: item.buy_price })
+          .eq('id', item.product_id);
+          
+        if (updateError) throw updateError;
+      } else if (item.type === 'ingredient' && item.ingredient_id) {
+        const { data: ing, error: fetchError } = await supabase
+          .from('ingredients')
+          .select('current_stock, yield_quantity')
+          .eq('id', item.ingredient_id)
+          .single();
+          
+        if (fetchError) throw fetchError;
         
-      if (updateError) throw updateError;
+        // Konversi: jumlah beli (satuan besar) dikali yield_quantity (porsi)
+        const yieldQty = parseFloat(ing.yield_quantity || '1');
+        const convertedStock = item.qty * yieldQty;
+        
+        const newStock = (ing.current_stock || 0) + convertedStock;
+        
+        // Ingredients table doesn't have cost_price in our final schema
+        const { error: updateError } = await supabase
+          .from('ingredients')
+          .update({ current_stock: newStock })
+          .eq('id', item.ingredient_id);
+          
+        if (updateError) throw updateError;
+      }
     }
 
     return { success: true, purchaseId: purchase.id };

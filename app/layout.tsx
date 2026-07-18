@@ -18,13 +18,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Okax POS",
-  description: "Okax Point of Sale and Sales Management Application",
+  title: "DIMDIM SHINE POS",
+  description: "DIMDIM SHINE Point of Sale and Sales Management Application",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Okax POS",
+    title: "DIMDIM SHINE POS",
   },
 };
 

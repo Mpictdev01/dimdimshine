@@ -16,6 +16,7 @@ export default function AdminProducts() {
   const [products, setProducts] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [allIngredients, setAllIngredients] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -25,7 +26,7 @@ export default function AdminProducts() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [formData, setFormData] = useState({ name: '', category_id: '', price: '', unit_id: '' });
+  const [formData, setFormData] = useState<{name: string, category_id: string, price: string, unit_id: string, ingredients: {ingredient_id: string, quantity: number}[]}>({ name: '', category_id: '', price: '', unit_id: '', ingredients: [] });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -39,15 +40,17 @@ export default function AdminProducts() {
 
   const fetchProducts = async () => {
     setIsLoading(true);
-    const [prodRes, unitRes, catRes] = await Promise.all([
-      supabase.from('products').select('*, units(name), categories(name)').order('created_at', { ascending: false }),
+    const [prodRes, unitRes, catRes, ingRes] = await Promise.all([
+      supabase.from('products').select('*, units(name), categories(name), product_ingredients(ingredient_id, quantity)').order('created_at', { ascending: false }),
       supabase.from('units').select('*').order('name'),
-      supabase.from('categories').select('*').order('name')
+      supabase.from('categories').select('*').order('name'),
+      supabase.from('ingredients').select('id, name, unit').order('name')
     ]);
     
     if (prodRes.data) setProducts(prodRes.data);
     if (unitRes.data) setUnits(unitRes.data);
     if (catRes.data) setCategories(catRes.data);
+    if (ingRes.data) setAllIngredients(ingRes.data);
     
     setIsLoading(false);
   };
@@ -99,11 +102,12 @@ export default function AdminProducts() {
         name: product.name,
         category_id: product.category_id || '',
         price: product.price.toString(),
-        unit_id: product.unit_id || ''
+        unit_id: product.unit_id || '',
+        ingredients: product.product_ingredients || []
       });
     } else {
       setEditingProduct(null);
-      setFormData({ name: '', category_id: '', price: '', unit_id: '' });
+      setFormData({ name: '', category_id: '', price: '', unit_id: '', ingredients: [] });
     }
     setIsModalOpen(true);
   };
@@ -133,7 +137,19 @@ export default function AdminProducts() {
         .single();
         
       if (!error && data) {
-        setProducts(products.map(p => p.id === data.id ? data : p));
+        // Update ingredients
+        await supabase.from('product_ingredients').delete().eq('product_id', editingProduct.id);
+        if (formData.ingredients.length > 0) {
+          const ingPayload = formData.ingredients.map(ing => ({
+            product_id: editingProduct.id,
+            ingredient_id: ing.ingredient_id,
+            quantity: ing.quantity
+          }));
+          await supabase.from('product_ingredients').insert(ingPayload);
+        }
+        
+        // Refetch to get complete updated data
+        fetchProducts();
         closeModal();
       } else {
         alert('Gagal memperbarui produk');
@@ -152,13 +168,40 @@ export default function AdminProducts() {
         .single();
         
       if (!error && data) {
-        setProducts([data, ...products]);
+        if (formData.ingredients.length > 0) {
+          const ingPayload = formData.ingredients.map(ing => ({
+            product_id: data.id,
+            ingredient_id: ing.ingredient_id,
+            quantity: ing.quantity
+          }));
+          await supabase.from('product_ingredients').insert(ingPayload);
+        }
+        fetchProducts();
         closeModal();
       } else {
         alert('Gagal menambahkan produk');
       }
     }
     setIsSubmitting(false);
+  };
+
+  const addIngredientRow = () => {
+    setFormData({
+      ...formData,
+      ingredients: [...formData.ingredients, { ingredient_id: '', quantity: 1 }]
+    });
+  };
+
+  const updateIngredientRow = (index: number, field: string, value: any) => {
+    const newIngredients = [...formData.ingredients];
+    newIngredients[index] = { ...newIngredients[index], [field]: value };
+    setFormData({ ...formData, ingredients: newIngredients });
+  };
+
+  const removeIngredientRow = (index: number) => {
+    const newIngredients = [...formData.ingredients];
+    newIngredients.splice(index, 1);
+    setFormData({ ...formData, ingredients: newIngredients });
   };
 
   const formatPrice = (price: number) => {
@@ -381,6 +424,71 @@ export default function AdminProducts() {
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700">Resep / Bahan Baku (Opsional)</h3>
+                    <p className="text-xs text-slate-500 mt-1">Jika produk ini memiliki resep (BOM), tentukan bahan baku yang dibutuhkan per 1 porsi.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addIngredientRow}
+                    className="text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <Plus size={16} />
+                    Tambah Bahan
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {formData.ingredients.map((ing, idx) => {
+                    const selectedIng = allIngredients.find(i => i.id === ing.ingredient_id);
+                    return (
+                      <div key={idx} className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <div className="flex-1">
+                          <select
+                            required
+                            value={ing.ingredient_id}
+                            onChange={(e) => updateIngredientRow(idx, 'ingredient_id', e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Pilih Bahan Baku</option>
+                            {allIngredients.map(a => (
+                              <option key={a.id} value={a.id}>{a.name} ({a.unit})</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-32 flex items-center gap-2">
+                          <input
+                            type="number"
+                            required
+                            min="0.01"
+                            step="0.01"
+                            value={ing.quantity || ''}
+                            onChange={(e) => updateIngredientRow(idx, 'quantity', parseFloat(e.target.value))}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Qty"
+                          />
+                          <span className="text-xs text-slate-500 whitespace-nowrap">{selectedIng?.unit || '-'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeIngredientRow(idx)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {formData.ingredients.length === 0 && (
+                    <div className="text-center py-6 bg-slate-50/50 rounded-xl border border-slate-100 border-dashed">
+                      <p className="text-sm text-slate-500">Produk ini belum memiliki resep (BOM).<br/>Stok akan dihitung berdasarkan stok fisik produk jadi.</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

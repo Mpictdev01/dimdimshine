@@ -1,4 +1,4 @@
-# 🔍 Analisis & Saran Perbaikan — Okax POS
+# 🔍 Analisis & Saran Perbaikan — DIMDIM SHINE POS
 
 Dokumen ini berisi temuan dan rekomendasi perbaikan berdasarkan review menyeluruh terhadap seluruh codebase.
 

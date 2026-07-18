@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Plus, Loader2, X, Save, Search, Trash2, ShoppingCart } from 'lucide-react';
 import { createPurchase } from '@/app/actions/purchase';
+import clsx from 'clsx';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,6 +15,7 @@ export default function AdminPurchases() {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [ingredients, setIngredients] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Form State
@@ -21,10 +23,17 @@ export default function AdminPurchases() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [note, setNote] = useState('');
-  const [cartItems, setCartItems] = useState<{product_id: string, name: string, qty: number, buy_price: number}[]>([]);
+  const [cartItems, setCartItems] = useState<{
+    id: string, 
+    name: string, 
+    qty: number, 
+    buy_price: number, 
+    type: 'product'|'ingredient'
+  }[]>([]);
   
-  // Product Selection State
+  // Product/Ingredient Selection State
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchType, setSearchType] = useState<'product'|'ingredient'>('product');
   
   useEffect(() => {
     fetchData();
@@ -32,15 +41,17 @@ export default function AdminPurchases() {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [purRes, supRes, prodRes] = await Promise.all([
+    const [purRes, supRes, prodRes, ingRes] = await Promise.all([
       supabase.from('purchases').select('*, suppliers(name)').order('created_at', { ascending: false }),
       supabase.from('suppliers').select('*').order('name'),
-      supabase.from('products').select('*, units(name)').order('name')
+      supabase.from('products').select('*, units(name)').order('name'),
+      supabase.from('ingredients').select('*').order('name')
     ]);
     
     if (purRes.data) setPurchases(purRes.data);
     if (supRes.data) setSuppliers(supRes.data);
     if (prodRes.data) setProducts(prodRes.data);
+    if (ingRes.data) setIngredients(ingRes.data);
     
     setIsLoading(false);
   };
@@ -50,6 +61,7 @@ export default function AdminPurchases() {
     setNote('');
     setCartItems([]);
     setSearchQuery('');
+    setSearchType('product');
     setIsModalOpen(true);
   };
 
@@ -57,31 +69,32 @@ export default function AdminPurchases() {
     setIsModalOpen(false);
   };
 
-  const addItemToCart = (product: any) => {
-    const existing = cartItems.find(item => item.product_id === product.id);
+  const addItemToCart = (item: any, type: 'product'|'ingredient') => {
+    const existing = cartItems.find(c => c.id === item.id && c.type === type);
     if (existing) {
-      setCartItems(cartItems.map(item => 
-        item.product_id === product.id ? { ...item, qty: item.qty + 1 } : item
+      setCartItems(cartItems.map(c => 
+        (c.id === item.id && c.type === type) ? { ...c, qty: c.qty + 1 } : c
       ));
     } else {
       setCartItems([...cartItems, {
-        product_id: product.id,
-        name: product.name,
+        id: item.id,
+        name: item.name,
         qty: 1,
-        buy_price: 0
+        buy_price: 0,
+        type: type
       }]);
     }
     setSearchQuery('');
   };
 
-  const updateCartItem = (id: string, field: 'qty' | 'buy_price', value: number) => {
-    setCartItems(cartItems.map(item => 
-      item.product_id === id ? { ...item, [field]: value } : item
+  const updateCartItem = (id: string, type: 'product'|'ingredient', field: 'qty' | 'buy_price', value: number) => {
+    setCartItems(cartItems.map(c => 
+      (c.id === id && c.type === type) ? { ...c, [field]: value } : c
     ));
   };
 
-  const removeCartItem = (id: string) => {
-    setCartItems(cartItems.filter(item => item.product_id !== id));
+  const removeCartItem = (id: string, type: 'product'|'ingredient') => {
+    setCartItems(cartItems.filter(c => !(c.id === id && c.type === type)));
   };
 
   const totalAmount = cartItems.reduce((sum, item) => sum + (item.qty * item.buy_price), 0);
@@ -93,7 +106,7 @@ export default function AdminPurchases() {
       return;
     }
     if (cartItems.length === 0) {
-      alert('Tambahkan setidaknya 1 produk!');
+      alert('Tambahkan setidaknya 1 produk/bahan baku!');
       return;
     }
     // Cek harga beli 0
@@ -103,9 +116,17 @@ export default function AdminPurchases() {
 
     setIsSubmitting(true);
 
+    const payload = cartItems.map(i => ({
+      product_id: i.type === 'product' ? i.id : undefined,
+      ingredient_id: i.type === 'ingredient' ? i.id : undefined,
+      qty: Number(i.qty),
+      buy_price: Number(i.buy_price),
+      type: i.type
+    }));
+
     const res = await createPurchase(
       selectedSupplier,
-      cartItems.map(i => ({ product_id: i.product_id, qty: Number(i.qty), buy_price: Number(i.buy_price) })),
+      payload,
       note,
       totalAmount
     );
@@ -124,7 +145,9 @@ export default function AdminPurchases() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
   };
 
-  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredItems = searchType === 'product' 
+    ? products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : ingredients.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="p-8 h-full relative flex flex-col">
@@ -199,7 +222,7 @@ export default function AdminPurchases() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
               <div>
                 <h2 className="text-xl font-bold text-slate-800">Pencatatan Barang Masuk</h2>
-                <p className="text-sm text-slate-500">Stok produk akan bertambah secara otomatis</p>
+                <p className="text-sm text-slate-500">Stok produk/bahan baku akan bertambah secara otomatis</p>
               </div>
               <button onClick={closeModal} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors">
                 <X size={20} />
@@ -236,14 +259,30 @@ export default function AdminPurchases() {
 
               {/* Pencarian Produk */}
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <label className="block text-sm font-semibold text-slate-700 mb-3">Pilih Produk (Yang Dibeli)</label>
+                <div className="flex gap-4 mb-4 border-b border-slate-100 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setSearchType('product')}
+                    className={clsx("font-semibold pb-2 border-b-2 transition-colors", searchType === 'product' ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
+                  >
+                    Beli Produk Jadi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSearchType('ingredient')}
+                    className={clsx("font-semibold pb-2 border-b-2 transition-colors", searchType === 'ingredient' ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
+                  >
+                    Beli Bahan Baku
+                  </button>
+                </div>
+
                 <div className="relative mb-4">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                     <Search size={18} />
                   </div>
                   <input
                     type="text"
-                    placeholder="Cari nama produk untuk ditambahkan..."
+                    placeholder={`Cari nama ${searchType === 'product' ? 'produk' : 'bahan baku'} untuk dibeli...`}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
@@ -252,20 +291,20 @@ export default function AdminPurchases() {
 
                 {searchQuery && (
                   <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100 mb-4">
-                    {filteredProducts.map(prod => (
+                    {filteredItems.map(item => (
                       <div 
-                        key={prod.id} 
-                        onClick={() => addItemToCart(prod)}
+                        key={item.id} 
+                        onClick={() => addItemToCart(item, searchType)}
                         className="p-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center group transition-colors"
                       >
-                        <span className="font-medium text-slate-800">{prod.name}</span>
+                        <span className="font-medium text-slate-800">{item.name}</span>
                         <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded group-hover:bg-blue-100 group-hover:text-blue-700">
                           + Tambah
                         </span>
                       </div>
                     ))}
-                    {filteredProducts.length === 0 && (
-                      <div className="p-3 text-sm text-slate-500 text-center">Produk tidak ditemukan</div>
+                    {filteredItems.length === 0 && (
+                      <div className="p-3 text-sm text-slate-500 text-center">Data tidak ditemukan</div>
                     )}
                   </div>
                 )}
@@ -277,23 +316,26 @@ export default function AdminPurchases() {
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr className="text-slate-600 text-sm">
-                        <th className="font-semibold p-3 pl-4">Produk</th>
-                        <th className="font-semibold p-3 w-32">Kuantitas (Masuk)</th>
-                        <th className="font-semibold p-3 w-40">Harga Beli Satuan (Rp)</th>
+                        <th className="font-semibold p-3 pl-4">Item (Tipe)</th>
+                        <th className="font-semibold p-3 w-32">Kuantitas</th>
+                        <th className="font-semibold p-3 w-40">Harga Satuan (Rp)</th>
                         <th className="font-semibold p-3 w-40 text-right">Subtotal</th>
                         <th className="font-semibold p-3 w-16"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {cartItems.map(item => (
-                        <tr key={item.product_id} className="hover:bg-slate-50/50">
-                          <td className="p-3 pl-4 font-medium text-slate-800">{item.name}</td>
+                        <tr key={`${item.type}-${item.id}`} className="hover:bg-slate-50/50">
+                          <td className="p-3 pl-4">
+                            <div className="font-medium text-slate-800">{item.name}</div>
+                            <div className="text-xs text-slate-500">{item.type === 'product' ? 'Produk Jadi' : 'Bahan Baku'}</div>
+                          </td>
                           <td className="p-3">
                             <input 
                               type="number" 
                               min="0" step="0.01"
                               value={item.qty}
-                              onChange={e => updateCartItem(item.product_id, 'qty', Number(e.target.value))}
+                              onChange={e => updateCartItem(item.id, item.type, 'qty', Number(e.target.value))}
                               className="w-full px-2 py-1 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                           </td>
@@ -302,7 +344,7 @@ export default function AdminPurchases() {
                               type="number" 
                               min="0"
                               value={item.buy_price}
-                              onChange={e => updateCartItem(item.product_id, 'buy_price', Number(e.target.value))}
+                              onChange={e => updateCartItem(item.id, item.type, 'buy_price', Number(e.target.value))}
                               className="w-full px-2 py-1 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                           </td>
@@ -311,7 +353,7 @@ export default function AdminPurchases() {
                           </td>
                           <td className="p-3 text-right">
                             <button 
-                              onClick={() => removeCartItem(item.product_id)}
+                              onClick={() => removeCartItem(item.id, item.type)}
                               className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
                             >
                               <Trash2 size={16} />

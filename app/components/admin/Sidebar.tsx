@@ -38,6 +38,7 @@ const menuItems = [
     icon: Boxes, 
     path: '/admin/inventory',
     subItems: [
+      { name: 'Bahan Baku (BOM)', path: '/admin/inventory/ingredients' },
       { name: 'Pembelian (Barang Masuk)', path: '/admin/inventory/purchases' },
       { name: 'Data Supplier', path: '/admin/inventory/suppliers' },
       { name: 'Penyesuaian Stok', path: '/admin/inventory/adjustments' },

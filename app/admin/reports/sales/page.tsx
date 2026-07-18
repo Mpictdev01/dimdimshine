@@ -464,7 +464,7 @@ export default function AdminSalesReports() {
                       <h1 className="text-3xl font-black uppercase tracking-tight">
                         {printType === 'surat_jalan' ? 'SURAT JALAN' : 'FAKTUR PENJUALAN'}
                       </h1>
-                      <p className="text-sm mt-1 font-medium">CV. OKAX DISTRIBUSI NUSANTARA</p>
+                      <p className="text-sm mt-1 font-medium">CV. DIMDIM SHINE DISTRIBUSI NUSANTARA</p>
                       <p className="text-xs text-slate-600">Jl. Raya Pusat Perdagangan No. 88, Kota<br/>Telp: 0812-3456-7890</p>
                     </div>
                     <div className="text-right text-sm">
@@ -542,7 +542,7 @@ export default function AdminSalesReports() {
                     <div>
                       <p className="mb-16">Hormat Kami,</p>
                       <div className="border-b border-slate-400 w-3/4 mx-auto"></div>
-                      <p className="mt-2 font-semibold">CV. OKAX</p>
+                      <p className="mt-2 font-semibold">CV. DIMDIM SHINE</p>
                     </div>
                   </div>
 

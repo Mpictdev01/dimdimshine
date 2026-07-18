@@ -25,7 +25,6 @@ export async function processTransaction(payload: any) {
         order_type,
         subtotal,
         tax,
-        service_charge,
         total,
         payment_method,
         payment_status: payment_status || 'paid',
@@ -37,11 +36,11 @@ export async function processTransaction(payload: any) {
 
     if (txError) throw txError;
 
-    // Fetch products to get cost_price and current stock
+    // Fetch products to get cost_price, current stock, and their BOM (product_ingredients)
     const productIds = items.map((i: any) => i.productId);
     const { data: products } = await supabase
       .from('products')
-      .select('id, stock, cost_price')
+      .select('id, stock, cost_price, product_ingredients(ingredient_id, quantity)')
       .in('id', productIds);
 
     const productsMap = new Map(products?.map(p => [p.id, p]) || []);
@@ -61,14 +60,38 @@ export async function processTransaction(payload: any) {
 
     if (itemsError) throw itemsError;
 
-    // 3. Deduct inventory (Stok Fisik Distributor)
+    // 3. Deduct inventory (Bahan Baku / Stok Fisik)
     for (const item of items) {
       const prod = productsMap.get(item.productId);
-      if (prod && typeof prod.stock === 'number') {
-        await supabase
-          .from('products')
-          .update({ stock: prod.stock - item.quantity })
-          .eq('id', item.productId);
+      if (prod) {
+        // Cek apakah punya resep (BOM)
+        if (prod.product_ingredients && prod.product_ingredients.length > 0) {
+          // Potong stok dari bahan baku
+          for (const pi of prod.product_ingredients) {
+            // Ambil stok bahan baku saat ini
+            const { data: ing } = await supabase
+              .from('ingredients')
+              .select('current_stock')
+              .eq('id', pi.ingredient_id)
+              .single();
+              
+            if (ing) {
+              const deductedStock = item.quantity * pi.quantity;
+              await supabase
+                .from('ingredients')
+                .update({ current_stock: (ing.current_stock || 0) - deductedStock })
+                .eq('id', pi.ingredient_id);
+            }
+          }
+        } else {
+          // Tidak ada resep, potong stok fisik produk
+          if (typeof prod.stock === 'number') {
+            await supabase
+              .from('products')
+              .update({ stock: prod.stock - item.quantity })
+              .eq('id', item.productId);
+          }
+        }
       }
     }
 
@@ -92,19 +115,40 @@ export async function deleteTransaction(txId: string, shouldRestoreStock: boolea
     // 2. Kembalikan stok ke masing-masing produk JIKA di-request
     if (shouldRestoreStock && txItems && txItems.length > 0) {
       for (const item of txItems) {
-        // Ambil stok saat ini
+        // Ambil info produk dan BOM-nya
         const { data: prod } = await supabase
           .from('products')
-          .select('stock')
+          .select('stock, product_ingredients(ingredient_id, quantity)')
           .eq('id', item.product_id)
           .single();
           
-        if (prod && typeof prod.stock === 'number') {
-          // Kembalikan stok
-          await supabase
-            .from('products')
-            .update({ stock: prod.stock + item.quantity })
-            .eq('id', item.product_id);
+        if (prod) {
+          if (prod.product_ingredients && prod.product_ingredients.length > 0) {
+            // Kembalikan ke bahan baku
+            for (const pi of prod.product_ingredients) {
+              const { data: ing } = await supabase
+                .from('ingredients')
+                .select('current_stock')
+                .eq('id', pi.ingredient_id)
+                .single();
+              
+              if (ing) {
+                const restoredStock = item.quantity * pi.quantity;
+                await supabase
+                  .from('ingredients')
+                  .update({ current_stock: (ing.current_stock || 0) + restoredStock })
+                  .eq('id', pi.ingredient_id);
+              }
+            }
+          } else {
+            // Kembalikan stok fisik produk
+            if (typeof prod.stock === 'number') {
+              await supabase
+                .from('products')
+                .update({ stock: prod.stock + item.quantity })
+                .eq('id', item.product_id);
+            }
+          }
         }
       }
     }
@@ -143,26 +187,43 @@ export async function deleteTransactions(txIds: string[], shouldRestoreStock: bo
 
       if (fetchError) throw fetchError;
 
-      // 2. Agregasi total kuantitas per produk untuk mengurangi hit API
+      // 2. Kembalikan stok satu-satu dengan logika BOM
       if (txItems && txItems.length > 0) {
-        const productDiffs: Record<string, number> = {};
-        txItems.forEach(item => {
-          productDiffs[item.product_id] = (productDiffs[item.product_id] || 0) + item.quantity;
-        });
-
-        // 3. Kembalikan stok ke masing-masing produk
-        for (const [productId, qtyToRestore] of Object.entries(productDiffs)) {
+        for (const item of txItems) {
+          // Ambil info produk dan BOM-nya
           const { data: prod } = await supabase
             .from('products')
-            .select('stock')
-            .eq('id', productId)
+            .select('stock, product_ingredients(ingredient_id, quantity)')
+            .eq('id', item.product_id)
             .single();
             
-          if (prod && typeof prod.stock === 'number') {
-            await supabase
-              .from('products')
-              .update({ stock: prod.stock + qtyToRestore })
-              .eq('id', productId);
+          if (prod) {
+            if (prod.product_ingredients && prod.product_ingredients.length > 0) {
+              // Kembalikan ke bahan baku
+              for (const pi of prod.product_ingredients) {
+                const { data: ing } = await supabase
+                  .from('ingredients')
+                  .select('current_stock')
+                  .eq('id', pi.ingredient_id)
+                  .single();
+                
+                if (ing) {
+                  const restoredStock = item.quantity * pi.quantity;
+                  await supabase
+                    .from('ingredients')
+                    .update({ current_stock: (ing.current_stock || 0) + restoredStock })
+                    .eq('id', pi.ingredient_id);
+                }
+              }
+            } else {
+              // Kembalikan stok fisik produk
+              if (typeof prod.stock === 'number') {
+                await supabase
+                  .from('products')
+                  .update({ stock: prod.stock + item.quantity })
+                  .eq('id', item.product_id);
+              }
+            }
           }
         }
       }

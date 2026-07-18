@@ -1,6 +1,6 @@
-# Okax POS - Developer Guide
+# DIMDIM SHINE POS - Developer Guide
 
-Dokumen ini dibuat untuk membantu developer baru memahami struktur, teknologi, dan alur kerja aplikasi **Okax POS** — sebuah sistem Point of Sale dan Sales Management untuk distribusi/grosir.
+Dokumen ini dibuat untuk membantu developer baru memahami struktur, teknologi, dan alur kerja aplikasi **DIMDIM SHINE POS** — sebuah sistem Point of Sale dan Sales Management untuk distribusi/grosir.
 
 ## 🚀 Teknologi yang Digunakan (Tech Stack)
 
@@ -26,7 +26,7 @@ Dokumen ini dibuat untuk membantu developer baru memahami struktur, teknologi, d
 Berikut pemetaan folder dan file beserta fungsinya berdasarkan kondisi terkini:
 
 ```text
-okax-pos/
+dimdimshine-pos/
 ├── app/                              # Direktori utama Next.js (App Router)
 │   ├── actions/                      # Server Actions (logika backend)
 │   │   ├── inventory.ts              # Penyesuaian stok (stock opname)
@@ -105,7 +105,7 @@ okax-pos/
 │       └── client.ts                 # Singleton Supabase client
 │
 ├── public/                           # Aset statis
-│   ├── OKAX.png                      # Logo/ikon aplikasi
+│   ├── DIMDIM_SHINE.png                      # Logo/ikon aplikasi
 │   └── manifest.json                 # PWA Web App Manifest
 │
 ├── next.config.ts                    # Konfigurasi Next.js + PWA (Workbox)
@@ -318,4 +318,4 @@ npm start
 
 Pastikan file `.env.local` sudah terisi dengan benar sebelum menjalankan.
 
-Semoga panduan ini membantu Anda memahami *codebase* Okax POS dengan cepat! 🚀
+Semoga panduan ini membantu Anda memahami *codebase* DIMDIM SHINE POS dengan cepat! 🚀

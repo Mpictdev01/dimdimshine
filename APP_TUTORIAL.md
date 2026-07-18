@@ -1,6 +1,6 @@
-# 📖 Okax POS — Panduan Lengkap Penggunaan Aplikasi
+# 📖 DIMDIM SHINE POS — Panduan Lengkap Penggunaan Aplikasi
 
-Dokumen ini adalah tutorial lengkap cara menggunakan aplikasi **Okax POS** untuk semua peran pengguna, mulai dari Sales (kasir/penjual) hingga Admin/Manager (backoffice).
+Dokumen ini adalah tutorial lengkap cara menggunakan aplikasi **DIMDIM SHINE POS** untuk semua peran pengguna, mulai dari Sales (kasir/penjual) hingga Admin/Manager (backoffice).
 
 ---
 
@@ -32,7 +32,7 @@ Dokumen ini adalah tutorial lengkap cara menggunakan aplikasi **Okax POS** untuk
 
 ## 🌐 Pengantar & Gambaran Umum
 
-**Okax POS** adalah aplikasi Point of Sale (POS) berbasis web yang dirancang untuk bisnis distribusi/grosir. Aplikasi ini terbagi menjadi dua antarmuka utama:
+**DIMDIM SHINE POS** adalah aplikasi Point of Sale (POS) berbasis web yang dirancang untuk bisnis distribusi/grosir. Aplikasi ini terbagi menjadi dua antarmuka utama:
 
 | Antarmuka | Akses | Pengguna | Fungsi Utama |
 |---|---|---|---|
@@ -52,7 +52,7 @@ Ketika pertama kali membuka aplikasi (`/`), pengguna akan otomatis diarahkan ke 
 Sebelum bisa mencatat transaksi, setiap sales harus login terlebih dahulu untuk membuka sesi kerja (shift).
 
 **Langkah-langkah:**
-1. Buka aplikasi Okax POS — Anda akan langsung diarahkan ke halaman **Login Sales**.
+1. Buka aplikasi DIMDIM SHINE POS — Anda akan langsung diarahkan ke halaman **Login Sales**.
 2. Masukkan **PIN** yang telah diberikan oleh Admin/Manager. Contoh: `1234`.
 3. Klik tombol **"Login Sekarang"**.
 4. Jika PIN valid dan peran Anda adalah Sales, Manager, atau Super Admin:
@@ -487,7 +487,7 @@ Menampilkan semua mutasi stok dari 3 sumber:
 
 ## 📱 Fitur PWA (Install di Perangkat)
 
-Okax POS mendukung instalasi sebagai aplikasi mandiri di perangkat Anda.
+DIMDIM SHINE POS mendukung instalasi sebagai aplikasi mandiri di perangkat Anda.
 
 ### Android / Chrome Desktop
 1. Saat pertama kali membuka aplikasi, akan muncul **banner install** di bagian bawah layar.

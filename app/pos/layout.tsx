@@ -5,7 +5,7 @@ export default function PosLayout({ children }: { children: ReactNode }) {
     <div className="flex flex-col h-screen w-full bg-slate-50 overflow-hidden font-sans">
       <header className="h-16 bg-white border-b shadow-sm flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-slate-800 tracking-tight">Okax POS</h1>
+          <h1 className="text-xl font-bold text-slate-800 tracking-tight">DIMDIM SHINE POS</h1>
           <div className="h-6 w-px bg-slate-200"></div>
           <span className="text-sm text-slate-500 font-medium">Terminal Utama</span>
         </div>

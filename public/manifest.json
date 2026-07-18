@@ -1,19 +1,19 @@
 {
-  "name": "Okax POS / Sales",
-  "short_name": "Okax",
-  "description": "Okax Point of Sale and Sales Management Application",
+  "name": "DIMDIM SHINE POS / Sales",
+  "short_name": "DIMDIM SHINE",
+  "description": "DIMDIM SHINE Point of Sale and Sales Management Application",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
   "icons": [
     {
-      "src": "/OKAX.png",
+      "src": "/DIMDIM_SHINE.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/OKAX.png",
+      "src": "/DIMDIM_SHINE.png",
       "sizes": "512x512",
       "type": "image/png"
     }

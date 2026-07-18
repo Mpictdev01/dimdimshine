@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import Sidebar from '@/app/components/admin/Sidebar';
 
 export const metadata = {
-  title: 'Okax Backoffice',
+  title: 'DIMDIM SHINE Backoffice',
   description: 'Dashboard Admin POS Cloud',
 };
 

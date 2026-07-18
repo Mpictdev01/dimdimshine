@@ -34,16 +34,37 @@ export default function PosPage() {
 
     const fetchProducts = async () => {
       try {
-        const [prodRes, catRes] = await Promise.all([
-          supabase.from('products').select('*, categories(name), units(name)'),
-          supabase.from('categories').select('name').order('name')
+        const [prodRes, catRes, ingRes] = await Promise.all([
+          supabase.from('products').select('*, categories(name), units(name), product_ingredients(ingredient_id, quantity)'),
+          supabase.from('categories').select('name').order('name'),
+          supabase.from('ingredients').select('id, current_stock')
         ]);
         
         if (prodRes.error) throw prodRes.error;
         if (catRes.error) throw catRes.error;
+        if (ingRes.error) throw ingRes.error;
         
         if (prodRes.data) {
-          setProducts(prodRes.data);
+          const ingredientsMap = new Map(ingRes.data?.map(i => [i.id, i.current_stock || 0]) || []);
+          
+          // Kalkulasi maxStock
+          const productsWithCalculatedStock = prodRes.data.map(p => {
+            let maxStock = p.stock || 0;
+            
+            if (p.product_ingredients && p.product_ingredients.length > 0) {
+              // Jika punya BOM, maxStock adalah hasil pembagian stok bahan baku dengan quantity resep
+              const possibleQuantities = p.product_ingredients.map((pi: any) => {
+                const availableIngStock = ingredientsMap.get(pi.ingredient_id) || 0;
+                return Math.floor(availableIngStock / pi.quantity);
+              });
+              // Ambil nilai terkecil (limiting ingredient)
+              maxStock = Math.min(...possibleQuantities);
+            }
+            
+            return { ...p, stock: maxStock }; // Override stock property
+          });
+
+          setProducts(productsWithCalculatedStock);
         }
         if (catRes.data) {
           const allCategories = catRes.data.map((c: any) => c.name);

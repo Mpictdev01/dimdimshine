@@ -45,7 +45,7 @@ export default function AdminSuppliers() {
   const openModal = (supplier?: any) => {
     if (supplier) {
       setEditingSupplier(supplier);
-      setFormData({ name: supplier.name, contact: supplier.contact || '', address: supplier.address || '' });
+      setFormData({ name: supplier.name, contact: supplier.phone || '', address: supplier.address || '' });
     } else {
       setEditingSupplier(null);
       setFormData({ name: '', contact: '', address: '' });
@@ -64,7 +64,7 @@ export default function AdminSuppliers() {
 
     const payload = { 
       name: formData.name,
-      contact: formData.contact,
+      phone: formData.contact,
       address: formData.address
     };
 
@@ -138,7 +138,7 @@ export default function AdminSuppliers() {
                       {sup.name}
                     </td>
                     <td className="p-4 text-slate-600">
-                      {sup.contact || '-'}
+                      {sup.phone || '-'}
                     </td>
                     <td className="p-4 text-slate-600">
                       {sup.address || '-'}

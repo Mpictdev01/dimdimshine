@@ -44,7 +44,7 @@ export default function AdminLoginPage() {
     <div className="flex h-screen w-full items-center justify-center bg-slate-900 absolute inset-0 z-50">
       <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Okax <span className="text-blue-600">Admin</span></h1>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">DIMDIM SHINE <span className="text-blue-600">Admin</span></h1>
           <p className="text-slate-500 mt-2 text-sm">Masukkan PIN Manager/Admin</p>
         </div>
 

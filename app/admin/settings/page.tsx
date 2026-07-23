@@ -19,7 +19,8 @@ export default function AdminSettings() {
     store_name: '',
     address: '',
     tax_rate: '0',
-    service_charge: '0'
+    service_charge: '0',
+    wa_report_template: ''
   });
 
   useEffect(() => {
@@ -40,7 +41,8 @@ export default function AdminSettings() {
         store_name: data.store_name,
         address: data.address,
         tax_rate: data.tax_rate.toString(),
-        service_charge: data.service_charge.toString()
+        service_charge: data.service_charge.toString(),
+        wa_report_template: data.wa_report_template || ''
       });
     }
     setIsLoading(false);
@@ -55,6 +57,7 @@ export default function AdminSettings() {
       address: formData.address,
       tax_rate: parseFloat(formData.tax_rate),
       service_charge: parseFloat(formData.service_charge),
+      wa_report_template: formData.wa_report_template,
       updated_at: new Date().toISOString()
     };
 
@@ -158,6 +161,32 @@ export default function AdminSettings() {
                 onChange={e => setFormData({...formData, service_charge: e.target.value})}
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Format Laporan WA */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-slate-50">
+            <Receipt className="text-blue-600" size={20} />
+            <h2 className="font-bold text-slate-800">Format Laporan WhatsApp (POS)</h2>
+          </div>
+          <div className="p-6">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Template Laporan</label>
+            <textarea 
+              value={formData.wa_report_template}
+              onChange={e => setFormData({...formData, wa_report_template: e.target.value})}
+              placeholder={`Laporan Hari Ini\n\nTotal Omzet: [OMZET]\nTunai: [TUNAI]\nQRIS: [QRIS]\n\nSisa Stok:\n[STOK]\n`}
+              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 font-mono text-sm"
+            ></textarea>
+            <div className="mt-3 bg-blue-50 p-4 rounded-xl border border-blue-100">
+              <p className="text-sm text-blue-800 font-semibold mb-2">Variabel Dinamis (bisa disisipkan di atas):</p>
+              <ul className="text-xs text-blue-700 space-y-1 font-mono">
+                <li><span className="font-bold">[OMZET]</span> : Total penjualan keseluruhan hari ini</li>
+                <li><span className="font-bold">[TUNAI]</span> : Total uang tunai / cash yang diterima</li>
+                <li><span className="font-bold">[QRIS]</span> : Total pembayaran masuk via QRIS</li>
+                <li><span className="font-bold">[STOK]</span> : Menampilkan list sisa seluruh bahan baku (contoh: Dimsum mentah, Adonan) otomatis dari baris baru</li>
+              </ul>
             </div>
           </div>
         </div>

@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { usePosStore } from '@/lib/store/usePosStore';
 import ProductCard from '@/app/components/pos/ProductCard';
 import Cart from '@/app/components/pos/Cart';
 import CustomerModal from '@/app/components/pos/CustomerModal';
-import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X } from 'lucide-react';
+import ReportModal from '@/app/components/pos/ReportModal';
+import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X, FileText } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,6 +25,9 @@ export default function PosPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [showMobileCart, setShowMobileCart] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [animateCart, setAnimateCart] = useState(false);
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
     // Jika tidak ada shift aktif, paksa ke halaman buka shift
@@ -113,6 +117,29 @@ export default function PosPage() {
     };
   }, [currentShift, router]);
 
+  const cartItemsCount = cart.reduce((total, item) => total + item.quantity, 0);
+  const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(price);
+  };
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (cartItemsCount > 0) {
+      setAnimateCart(true);
+      const timer = setTimeout(() => setAnimateCart(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [cartItemsCount]);
+
   if (!currentShift) return null; // Akan dialihkan ke /pos/shift
 
   const handleLogout = () => {
@@ -126,8 +153,6 @@ export default function PosPage() {
     const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchCategory && matchSearch;
   });
-
-  const cartItemsCount = cart.reduce((total, item) => total + item.quantity, 0);
 
   return (
     <div className="flex h-full w-full bg-slate-50 relative overflow-hidden">
@@ -149,17 +174,25 @@ export default function PosPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end flex-wrap sm:flex-nowrap">
             <div className="flex items-center gap-2 text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 flex-1 sm:flex-none justify-center">
               <UserCircle size={20} className="text-blue-500" />
               <span className="font-semibold text-sm truncate max-w-[120px] sm:max-w-none">Sales: {currentShift.cashierName}</span>
             </div>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 font-medium text-sm rounded-xl transition-colors border border-red-100"
-            >
-              <LogOut size={16} /> <span className="hidden sm:inline">Keluar</span>
-            </button>
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
+              <button 
+                onClick={() => setShowReportModal(true)}
+                className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 font-medium text-sm rounded-xl transition-colors border border-blue-100"
+              >
+                <FileText size={16} /> <span>Laporan</span>
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 font-medium text-sm rounded-xl transition-colors border border-red-100"
+              >
+                <LogOut size={16} /> <span className="hidden sm:inline">Keluar</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -228,17 +261,36 @@ export default function PosPage() {
       </div>
 
       {/* Tombol Floating Cart Mobile */}
-      <button 
-        onClick={() => setShowMobileCart(true)}
-        className="lg:hidden fixed bottom-6 right-6 z-30 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl shadow-xl flex items-center justify-center transition-transform active:scale-95"
-      >
-        <ShoppingBag size={24} />
-        {cartItemsCount > 0 && (
-          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold min-w-[24px] h-6 px-1.5 rounded-full flex items-center justify-center border-2 border-white">
-            {cartItemsCount}
-          </span>
-        )}
-      </button>
+      <div className={`lg:hidden fixed bottom-6 z-30 transition-all duration-300 flex ${cartItemsCount > 0 ? 'left-4 right-4' : 'right-6'}`}>
+        <button 
+          onClick={() => setShowMobileCart(true)}
+          className={`bg-blue-600 hover:bg-blue-700 text-white shadow-xl flex items-center justify-between transition-all duration-300 overflow-hidden active:scale-[0.98] ${
+            cartItemsCount > 0 
+              ? 'w-full rounded-2xl px-5 py-4' 
+              : 'w-14 h-14 rounded-2xl justify-center p-0'
+          } ${animateCart && cartItemsCount > 0 ? 'ring-4 ring-blue-400 scale-[1.02]' : ''} ${animateCart && cartItemsCount === 0 ? 'scale-125 ring-4 ring-blue-400 rotate-12' : ''}`}
+        >
+          {cartItemsCount > 0 ? (
+            <>
+              <div className="flex flex-col items-start">
+                <span className="text-[11px] font-semibold text-blue-200 uppercase tracking-wider">{cartItemsCount} Produk di Keranjang</span>
+                <span className="font-bold text-lg leading-tight">{formatPrice(cartTotal)}</span>
+              </div>
+              <div className="flex items-center gap-2 font-semibold bg-white/20 px-4 py-2 rounded-xl shrink-0">
+                <span>Buka</span>
+                <ShoppingBag size={18} />
+              </div>
+            </>
+          ) : (
+            <ShoppingBag size={24} />
+          )}
+        </button>
+      </div>
+
+      {/* Modal Laporan */}
+      {showReportModal && (
+        <ReportModal onClose={() => setShowReportModal(false)} />
+      )}
 
     </div>
   );

@@ -176,14 +176,21 @@ export default function AdminIngredients() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <span className={clsx(
-                        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-                        ing.current_stock <= ing.min_stock_alert 
-                          ? "bg-red-100 text-red-800 border border-red-200" 
-                          : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                      )}>
-                        {ing.current_stock || 0} {ing.yield_unit || ing.unit}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className={clsx(
+                          "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                          ing.current_stock <= (ing.min_stock_alert * (ing.yield_quantity || 1)) // min stock is in yield unit
+                            ? "bg-red-100 text-red-800 border border-red-200" 
+                            : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        )}>
+                          {ing.current_stock || 0} {ing.yield_unit || ing.unit}
+                        </span>
+                        {ing.yield_quantity > 1 && (
+                          <span className="text-[11px] text-slate-500 font-medium">
+                            ≈ {((ing.current_stock || 0) / ing.yield_quantity).toFixed(2).replace(/\.?0+$/, '')} {ing.unit}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 font-medium text-slate-700">
                       {ing.unit}

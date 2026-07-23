@@ -44,10 +44,29 @@ export default function AdminProducts() {
       supabase.from('products').select('*, units(name), categories(name), product_ingredients(ingredient_id, quantity)').order('created_at', { ascending: false }),
       supabase.from('units').select('*').order('name'),
       supabase.from('categories').select('*').order('name'),
-      supabase.from('ingredients').select('id, name, unit').order('name')
+      supabase.from('ingredients').select('id, name, unit, current_stock').order('name')
     ]);
     
-    if (prodRes.data) setProducts(prodRes.data);
+    if (prodRes.data && ingRes.data) {
+      const ingredientsMap = new Map(ingRes.data.map(i => [i.id, i.current_stock || 0]));
+      
+      const mappedProducts = prodRes.data.map(p => {
+        let maxStock = p.stock || 0;
+        
+        if (p.product_ingredients && p.product_ingredients.length > 0) {
+          const possibleQuantities = p.product_ingredients.map((pi: any) => {
+            const availableIngStock = ingredientsMap.get(pi.ingredient_id) || 0;
+            return Math.floor(availableIngStock / pi.quantity);
+          });
+          maxStock = Math.min(...possibleQuantities);
+        }
+        
+        return { ...p, stock: maxStock }; // Override stock for UI
+      });
+      setProducts(mappedProducts);
+    } else if (prodRes.data) {
+      setProducts(prodRes.data);
+    }
     if (unitRes.data) setUnits(unitRes.data);
     if (catRes.data) setCategories(catRes.data);
     if (ingRes.data) setAllIngredients(ingRes.data);

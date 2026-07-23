@@ -25,7 +25,6 @@ export default function AdminDashboard() {
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
 
   // Master data for filters
-  const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
 
   // Filter Input States
@@ -33,14 +32,14 @@ export default function AdminDashboard() {
   const todayStr = today.toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState(todayStr);
-  const [selectedCustomer, setSelectedCustomer] = useState('all');
+  const [selectedPayment, setSelectedPayment] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState('all');
 
   // Active Filter States (applied when button is clicked)
   const [activeFilters, setActiveFilters] = useState({
     startDate: todayStr,
     endDate: todayStr,
-    customer: 'all',
+    payment: 'all',
     product: 'all'
   });
 
@@ -53,11 +52,9 @@ export default function AdminDashboard() {
     }
     
     const fetchMasterData = async () => {
-      const [custRes, prodRes] = await Promise.all([
-        supabase.from('customers').select('id, name').order('name'),
+      const [prodRes] = await Promise.all([
         supabase.from('products').select('id, name').order('name')
       ]);
-      if (custRes.data) setCustomers(custRes.data);
       if (prodRes.data) setProducts(prodRes.data);
     };
     
@@ -81,12 +78,8 @@ export default function AdminDashboard() {
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
           
-        if (activeFilters.customer !== 'all') {
-          if (activeFilters.customer === 'umum') {
-            txQuery = txQuery.is('customer_id', null);
-          } else {
-            txQuery = txQuery.eq('customer_id', activeFilters.customer);
-          }
+        if (activeFilters.payment !== 'all') {
+          txQuery = txQuery.eq('payment_method', activeFilters.payment);
         }
         
         const { data: salesData } = await txQuery;
@@ -171,12 +164,35 @@ export default function AdminDashboard() {
         }
 
         // 3. Produk Stok Menipis (Independent dari filter tanggal)
-        const { data: lowStock } = await supabase
-          .from('products')
-          .select('*, units(name), categories(name)')
-          .lt('stock', 20)
-          .order('stock', { ascending: true })
-          .limit(10);
+        const [prodRes, ingRes] = await Promise.all([
+          supabase.from('products').select('*, units(name), categories(name), product_ingredients(ingredient_id, quantity)'),
+          supabase.from('ingredients').select('id, current_stock')
+        ]);
+        
+        let lowStock: any[] = [];
+        
+        if (prodRes.data && ingRes.data) {
+          const ingredientsMap = new Map(ingRes.data.map(i => [i.id, i.current_stock || 0]));
+          
+          const mappedProducts = prodRes.data.map(p => {
+            let maxStock = p.stock || 0;
+            
+            if (p.product_ingredients && p.product_ingredients.length > 0) {
+              const possibleQuantities = p.product_ingredients.map((pi: any) => {
+                const availableIngStock = ingredientsMap.get(pi.ingredient_id) || 0;
+                return Math.floor(availableIngStock / pi.quantity);
+              });
+              maxStock = Math.min(...possibleQuantities);
+            }
+            
+            return { ...p, stock: maxStock };
+          });
+          
+          lowStock = mappedProducts
+            .filter(p => p.stock < 20)
+            .sort((a, b) => a.stock - b.stock)
+            .slice(0, 10);
+        }
 
         setStats({ 
           salesTotal: totalSales, 
@@ -201,7 +217,7 @@ export default function AdminDashboard() {
     setActiveFilters({
       startDate,
       endDate,
-      customer: selectedCustomer,
+      payment: selectedPayment,
       product: selectedProduct
     });
   };
@@ -251,17 +267,15 @@ export default function AdminDashboard() {
         </div>
         
         <div className="w-full lg:w-1/4">
-          <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Pelanggan</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Metode Pembayaran</label>
           <select 
-            value={selectedCustomer} 
-            onChange={(e) => setSelectedCustomer(e.target.value)}
+            value={selectedPayment} 
+            onChange={(e) => setSelectedPayment(e.target.value)}
             className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors bg-slate-50 hover:bg-white text-sm font-medium text-slate-700"
           >
-            <option value="all">Semua Pelanggan</option>
-            <option value="umum">Pelanggan Umum (Tanpa Member)</option>
-            {customers.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
+            <option value="all">Semua Metode</option>
+            <option value="cash">Tunai</option>
+            <option value="qris">QRIS</option>
           </select>
         </div>
         

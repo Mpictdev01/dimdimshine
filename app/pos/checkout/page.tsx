@@ -14,10 +14,8 @@ const supabase = createClient(
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, currentShift, orderType, activeCustomer, notes, setNotes, clearCart, setActiveCustomer } = usePosStore();
-  
-  const [paymentMethod, setPaymentMethod] = useState<'lunas' | 'tempo'>('lunas');
-  const [dueDate, setDueDate] = useState<string>('');
+  const { cart, currentShift, orderType, notes, setNotes, clearCart } = usePosStore();
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris'>('cash');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [lastTxId, setLastTxId] = useState<string | null>(null);
@@ -54,16 +52,16 @@ export default function CheckoutPage() {
     const payload = {
       shift_id: currentShift.id,
       cashier_id: currentShift.cashierId,
-      customer_id: activeCustomer?.id === 'new-customer' ? null : (activeCustomer?.id || null),
+      customer_id: null,
       order_type: orderType,
       subtotal,
       tax,
       service_charge: 0,
       total,
-      payment_method: 'cash', // Selalu set ke cash/tunai untuk menghindari error constraint, bedakan dari status
-      payment_status: paymentMethod === 'tempo' ? 'unpaid' : 'paid',
-      due_date: paymentMethod === 'tempo' && dueDate ? dueDate : null,
-      table_number: notes || null, // Meminjam kolom table_number untuk menyimpan Catatan/Nama Pelanggan Baru
+      payment_method: paymentMethod,
+      payment_status: 'paid',
+      due_date: null,
+      table_number: notes || null, // Meminjam kolom table_number untuk menyimpan Catatan
       items: cart
     };
 
@@ -74,7 +72,6 @@ export default function CheckoutPage() {
       setLastTxId(res.transaction?.id);
       setIsSuccess(true);
       clearCart();
-      setActiveCustomer(null);
       setNotes('');
     } else {
       alert(res.error || 'Terjadi kesalahan saat memproses pembayaran');
@@ -118,7 +115,7 @@ export default function CheckoutPage() {
             
             <h3 className="font-bold text-lg mb-4 pb-3 border-b border-dashed border-slate-300 text-slate-700 flex justify-between items-end">
               Struk Pesanan
-              <span className="text-xs font-normal text-slate-400 uppercase tracking-wider">{paymentMethod}</span>
+              <span className="text-xs font-normal text-slate-400 uppercase tracking-wider">{paymentMethod === 'cash' ? 'Tunai' : 'QRIS'}</span>
             </h3>
             
             <div className="space-y-3 text-sm mb-4">
@@ -172,7 +169,7 @@ export default function CheckoutPage() {
             <h1 className="text-xl font-bold text-white tracking-tight">Detail Pembayaran</h1>
             <p className="text-sm text-slate-400 mt-0.5">
               <span className="inline-flex items-center justify-center bg-slate-800 px-2 py-0.5 rounded text-xs font-medium mr-2">{orderType === 'delivery' ? 'Kirim' : 'Ambil Sendiri'}</span>
-              {cart.length} item {activeCustomer ? ` • ${activeCustomer.name}` : notes ? ` • Baru: ${notes}` : ''}
+              {cart.length} item {notes ? ` • Catatan: ${notes}` : ''}
             </p>
           </div>
         </div>
@@ -219,48 +216,28 @@ export default function CheckoutPage() {
           
           <div className="grid grid-cols-2 gap-4 mb-10">
             <button
-              onClick={() => setPaymentMethod('lunas')}
+              onClick={() => setPaymentMethod('cash')}
               className={`p-5 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all duration-200 ${
-                paymentMethod === 'lunas' 
+                paymentMethod === 'cash' 
                   ? 'border-blue-600 bg-blue-50/50 text-blue-700 shadow-md shadow-blue-100' 
                   : 'border-slate-100 bg-white hover:border-blue-200 hover:bg-slate-50 text-slate-500'
               }`}
             >
-              <CheckCircle2 size={32} strokeWidth={paymentMethod === 'lunas' ? 2.5 : 2} />
-              <span className="font-semibold text-sm">Lunas</span>
+              <Banknote size={32} strokeWidth={paymentMethod === 'cash' ? 2.5 : 2} />
+              <span className="font-semibold text-sm">Tunai</span>
             </button>
             <button
-              onClick={() => setPaymentMethod('tempo')}
+              onClick={() => setPaymentMethod('qris')}
               className={`p-5 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 transition-all duration-200 ${
-                paymentMethod === 'tempo' 
-                  ? 'border-amber-500 bg-amber-50/50 text-amber-700 shadow-md shadow-amber-100' 
-                  : 'border-slate-100 bg-white hover:border-amber-200 hover:bg-slate-50 text-slate-500'
+                paymentMethod === 'qris' 
+                  ? 'border-emerald-500 bg-emerald-50/50 text-emerald-700 shadow-md shadow-emerald-100' 
+                  : 'border-slate-100 bg-white hover:border-emerald-200 hover:bg-slate-50 text-slate-500'
               }`}
             >
-              <Clock size={32} strokeWidth={paymentMethod === 'tempo' ? 2.5 : 2} />
-              <span className="font-semibold text-sm text-center">Tempo<br className="hidden sm:block"/>(Piutang)</span>
+              <QrCode size={32} strokeWidth={paymentMethod === 'qris' ? 2.5 : 2} />
+              <span className="font-semibold text-sm text-center">QRIS</span>
             </button>
           </div>
-
-
-
-          {paymentMethod === 'tempo' && (
-            <div className="bg-amber-50/50 p-6 sm:p-8 rounded-3xl border border-amber-100 shadow-sm mb-10 animate-in fade-in slide-in-from-bottom-4 duration-300">
-              <label className="block text-sm font-semibold text-amber-900 mb-4">Tenggat Waktu / Janji Bayar (Opsional)</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-6 py-5 text-xl font-bold text-slate-800 bg-white border-2 border-amber-200 rounded-2xl focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all shadow-sm"
-              />
-              <div className="mt-4 flex gap-3 p-4 bg-amber-100/50 rounded-xl text-amber-800">
-                <Clock size={20} className="shrink-0 text-amber-600"/>
-                <p className="text-sm leading-relaxed">
-                  Kosongkan jika tenggat waktu bayar fleksibel. Jika diisi, sistem akan otomatis menandai faktur ini jatuh tempo pada tanggal yang dipilih.
-                </p>
-              </div>
-            </div>
-          )}
 
           <div className="mt-auto pt-8">
             <button

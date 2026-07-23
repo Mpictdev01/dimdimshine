@@ -1,10 +1,9 @@
 'use client';
 
 import { usePosStore } from '@/lib/store/usePosStore';
-import { Minus, Plus, Trash2, ShoppingBag, Truck, Store, User, FileEdit } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, Truck, Store, FileEdit } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import CustomerModal from './CustomerModal';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -13,10 +12,8 @@ const supabase = createClient(
 );
 
 export default function Cart() {
-  const { cart, removeFromCart, updateQuantity, clearCart, orderType, setOrderType, activeCustomer, notes, setNotes } = usePosStore();
+  const { cart, removeFromCart, updateQuantity, clearCart, orderType, setOrderType, notes, setNotes } = usePosStore();
   const router = useRouter();
-  
-  const [showCustomerModal, setShowCustomerModal] = useState(false);
   
   const [taxRate, setTaxRate] = useState(11); // Default 11%
 
@@ -99,7 +96,7 @@ export default function Cart() {
           </div>
         ))}
 
-        {/* Kontrol Order & Pelanggan di Keranjang (Scrollable) */}
+        {/* Kontrol Order di Keranjang (Scrollable) */}
         <div className="mt-6 pt-4 border-t border-dashed border-slate-200 space-y-3">
           <div className="flex items-center p-1 bg-slate-100 rounded-xl w-full">
             <button
@@ -120,33 +117,15 @@ export default function Cart() {
             </button>
           </div>
 
-          <button
-            onClick={() => setShowCustomerModal(true)}
-            className={`w-full py-2.5 px-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 border-2 ${
-              activeCustomer?.id === 'new-customer' 
-                ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm' 
-                : activeCustomer 
-                  ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
-                  : 'border-red-300 bg-red-50 text-red-600 hover:bg-red-100 ring-2 ring-red-100 animate-pulse'
-            }`}
-          >
-            <User size={16} /> 
-            {activeCustomer ? activeCustomer.name : 'Wajib Pilih Pelanggan (Klik Disini)'}
-          </button>
-
           <div className="relative">
             <div className="absolute top-3 left-3 text-slate-400">
               <FileEdit size={16} />
             </div>
             <textarea
-              placeholder={activeCustomer?.id === 'new-customer' ? "Wajib tulis NAMA LENGKAP pelanggan baru dan nomor telepon/alamat di sini..." : "Catatan tambahan (Opsional)..."}
+              placeholder="Catatan tambahan (Opsional)..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className={`w-full pl-9 pr-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all resize-none h-16 ${
-                activeCustomer?.id === 'new-customer' && notes.trim() === ''
-                  ? 'border-red-300 bg-red-50 focus:ring-red-500 focus:bg-white'
-                  : 'border-slate-200 bg-slate-50 focus:bg-white focus:ring-blue-500'
-              }`}
+              className="w-full pl-9 pr-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all resize-none h-16 border-slate-200 bg-slate-50 focus:bg-white focus:ring-blue-500"
             ></textarea>
           </div>
         </div>
@@ -171,16 +150,11 @@ export default function Cart() {
         
         <button 
           onClick={() => router.push('/pos/checkout')}
-          disabled={!activeCustomer || (activeCustomer.id === 'new-customer' && notes.trim() === '')}
           className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold py-4 rounded-xl transition-all shadow-md active:scale-[0.98]"
         >
           Lanjut Pembayaran
         </button>
       </div>
-
-      {showCustomerModal && (
-        <CustomerModal onClose={() => setShowCustomerModal(false)} />
-      )}
     </div>
   );
 }

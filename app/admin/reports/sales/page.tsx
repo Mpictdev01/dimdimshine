@@ -65,7 +65,7 @@ export default function AdminSalesReports() {
 
     // Filter status di server side (jika bukan 'all')
     if (filterStatus !== 'all') {
-      query = query.eq('payment_status', filterStatus);
+      query = query.eq('payment_method', filterStatus);
     }
 
     // Filter tanggal
@@ -215,9 +215,9 @@ export default function AdminSalesReports() {
                 }}
                 className="px-4 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
               >
-                <option value="all">Semua Status</option>
-                <option value="paid">Lunas</option>
-                <option value="unpaid">Piutang (Tempo)</option>
+                <option value="all">Semua Metode</option>
+                <option value="cash">Tunai</option>
+                <option value="qris">QRIS</option>
               </select>
             </div>
           </div>
@@ -270,7 +270,7 @@ export default function AdminSalesReports() {
                   <th className="font-medium p-4">Tanggal & Jam</th>
                   <th className="font-medium p-4">ID Transaksi</th>
                   <th className="font-medium p-4">Pelanggan (Toko)</th>
-                  <th className="font-medium p-4 text-center">Status</th>
+                  <th className="font-medium p-4 text-center">Metode</th>
                   <th className="font-medium p-4 text-right">Total Nominal</th>
                   <th className="font-medium p-4 text-right pr-6">Aksi</th>
                 </tr>
@@ -301,10 +301,10 @@ export default function AdminSalesReports() {
                       )}
                     </td>
                     <td className="p-4 text-center">
-                      {tx.payment_status === 'unpaid' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-800">Tempo (Piutang)</span>
+                      {tx.payment_method === 'qris' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800">QRIS</span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800">Lunas</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800">Tunai</span>
                       )}
                     </td>
                     <td className="p-4 text-right font-bold text-slate-800">
@@ -470,9 +470,7 @@ export default function AdminSalesReports() {
                     <div className="text-right text-sm">
                       <p className="mb-1"><span className="text-slate-500">Tanggal:</span> <strong className="font-semibold">{new Date(tx.created_at).toLocaleDateString('id-ID')}</strong></p>
                       <p className="mb-1"><span className="text-slate-500">No. Dok:</span> <strong className="font-semibold">{tx.id.split('-')[0].toUpperCase()}</strong></p>
-                      {printType === 'faktur' && tx.payment_status === 'unpaid' && (
-                        <p className="mb-1 text-red-600"><span className="text-red-500">Jatuh Tempo:</span> <strong className="font-semibold">{new Date(tx.due_date).toLocaleDateString('id-ID')}</strong></p>
-                      )}
+                      <p className="mb-1"><span className="text-slate-500">Pembayaran:</span> <strong className="font-semibold">{tx.payment_method === 'qris' ? 'QRIS' : 'TUNAI'}</strong></p>
                     </div>
                   </div>
 

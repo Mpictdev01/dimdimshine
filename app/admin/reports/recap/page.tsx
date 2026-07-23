@@ -17,7 +17,7 @@ export default function RecapReportPage() {
   const [isLoading, setIsLoading] = useState(true);
   
   const [users, setUsers] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
+
   const [products, setProducts] = useState<any[]>([]);
 
   // Deletion States
@@ -30,7 +30,7 @@ export default function RecapReportPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedSales, setSelectedSales] = useState('all');
-  const [selectedCustomer, setSelectedCustomer] = useState('all');
+  const [selectedPayment, setSelectedPayment] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState('all');
 
   useEffect(() => {
@@ -40,17 +40,15 @@ export default function RecapReportPage() {
 
   useEffect(() => {
     applyFilters();
-  }, [transactions, startDate, endDate, selectedSales, selectedCustomer, selectedProduct]);
+  }, [transactions, startDate, endDate, selectedSales, selectedPayment, selectedProduct]);
 
   const fetchMasterData = async () => {
-    const [usersRes, custRes, prodRes] = await Promise.all([
+    const [usersRes, prodRes] = await Promise.all([
       supabase.from('users').select('id, full_name, role'),
-      supabase.from('customers').select('id, name'),
       supabase.from('products').select('id, name')
     ]);
 
     if (usersRes.data) setUsers(usersRes.data);
-    if (custRes.data) setCustomers(custRes.data);
     if (prodRes.data) setProducts(prodRes.data);
   };
 
@@ -93,12 +91,8 @@ export default function RecapReportPage() {
       filtered = filtered.filter(tx => tx.cashier_id === selectedSales);
     }
 
-    if (selectedCustomer !== 'all') {
-      if (selectedCustomer === 'umum') {
-        filtered = filtered.filter(tx => !tx.customer_id);
-      } else {
-        filtered = filtered.filter(tx => tx.customer_id === selectedCustomer);
-      }
+    if (selectedPayment !== 'all') {
+      filtered = filtered.filter(tx => tx.payment_method === selectedPayment);
     }
 
     if (selectedProduct !== 'all') {
@@ -140,7 +134,7 @@ export default function RecapReportPage() {
         'Subtotal': tx.subtotal,
         'Pajak': tx.tax || 0,
         'Total Nominal': tx.total,
-        'Status Pembayaran': tx.payment_status === 'unpaid' ? 'Piutang/Tempo' : 'Lunas'
+        'Metode Pembayaran': tx.payment_method === 'qris' ? 'QRIS' : 'Tunai'
       };
     });
 
@@ -236,15 +230,15 @@ export default function RecapReportPage() {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Pelanggan</label>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Metode Pembayaran</label>
           <select 
-            value={selectedCustomer}
-            onChange={e => setSelectedCustomer(e.target.value)}
+            value={selectedPayment}
+            onChange={e => setSelectedPayment(e.target.value)}
             className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
           >
-            <option value="all">Semua Pelanggan</option>
-            <option value="umum">Pelanggan Umum</option>
-            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="all">Semua Metode</option>
+            <option value="cash">Tunai</option>
+            <option value="qris">QRIS</option>
           </select>
         </div>
         <div>
@@ -306,8 +300,10 @@ export default function RecapReportPage() {
                     </td>
                     <td className="p-4 font-semibold text-slate-800">
                       {tx.customers?.name || 'Pelanggan Umum'}
-                      {tx.payment_status === 'unpaid' && (
-                        <span className="block mt-1 text-[10px] font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded w-max">Tempo</span>
+                      {tx.payment_method === 'qris' ? (
+                        <span className="block mt-1 text-[10px] font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded w-max">QRIS</span>
+                      ) : (
+                        <span className="block mt-1 text-[10px] font-medium bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded w-max">Tunai</span>
                       )}
                     </td>
                     <td className="p-4 text-slate-700">
@@ -355,10 +351,24 @@ export default function RecapReportPage() {
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Omzet Bersih</div>
-              <div className="text-xl font-black text-emerald-400">
-                {formatPrice(filteredTx.reduce((sum, tx) => sum + (tx.total || 0), 0))}
+            <div className="flex gap-6 justify-end">
+              <div className="text-right border-r border-slate-700 pr-6">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Tunai</div>
+                <div className="text-lg font-bold text-emerald-400">
+                  {formatPrice(filteredTx.filter(tx => tx.payment_method !== 'qris').reduce((sum, tx) => sum + (tx.total || 0), 0))}
+                </div>
+              </div>
+              <div className="text-right border-r border-slate-700 pr-6">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">QRIS</div>
+                <div className="text-lg font-bold text-blue-400">
+                  {formatPrice(filteredTx.filter(tx => tx.payment_method === 'qris').reduce((sum, tx) => sum + (tx.total || 0), 0))}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Omzet Bersih</div>
+                <div className="text-xl font-black text-white">
+                  {formatPrice(filteredTx.reduce((sum, tx) => sum + (tx.total || 0), 0))}
+                </div>
               </div>
             </div>
           </div>

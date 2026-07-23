@@ -97,7 +97,7 @@ export default function Sidebar() {
           <button onClick={() => setIsMobileOpen(true)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
             <Menu size={24} />
           </button>
-          <span className="font-bold text-lg">Okax <span className="text-blue-500">Admin</span></span>
+          <span className="font-bold text-lg">Dimdim Shine <span className="text-blue-500">Admin</span></span>
         </div>
       </div>
 
@@ -117,12 +117,13 @@ export default function Sidebar() {
           isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
         )}
       >
-        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800 shrink-0">
-          <div className="flex items-center justify-center w-full">
-            {!isCollapsed ? (
-              <h1 className="text-xl font-bold text-white tracking-tight">Okax <span className="text-blue-500">Admin</span></h1>
-            ) : (
-              <span className="text-xl font-bold text-white">O<span className="text-blue-500">A</span></span>
+        <div className="p-6 shrink-0 flex items-center justify-between border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <span className="font-bold text-lg text-white">DS</span>
+            </div>
+            {!isCollapsed && (
+              <h1 className="text-xl font-bold text-white tracking-tight">Dimdim Shine <span className="text-blue-500">Admin</span></h1>
             )}
           </div>
           <button 

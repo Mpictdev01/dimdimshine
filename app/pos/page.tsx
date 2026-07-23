@@ -37,7 +37,7 @@ export default function PosPage() {
         const [prodRes, catRes, ingRes] = await Promise.all([
           supabase.from('products').select('*, categories(name), units(name), product_ingredients(ingredient_id, quantity)'),
           supabase.from('categories').select('name').order('name'),
-          supabase.from('ingredients').select('id, current_stock')
+          supabase.from('ingredients').select('id, current_stock, yield_quantity, unit')
         ]);
         
         if (prodRes.error) throw prodRes.error;
@@ -45,23 +45,34 @@ export default function PosPage() {
         if (ingRes.error) throw ingRes.error;
         
         if (prodRes.data) {
-          const ingredientsMap = new Map(ingRes.data?.map(i => [i.id, i.current_stock || 0]) || []);
+          const ingredientsMap = new Map(ingRes.data?.map(i => [i.id, i]) || []);
           
           // Kalkulasi maxStock
           const productsWithCalculatedStock = prodRes.data.map(p => {
             let maxStock = p.stock || 0;
+            let rawStockInfo = '';
             
             if (p.product_ingredients && p.product_ingredients.length > 0) {
-              // Jika punya BOM, maxStock adalah hasil pembagian stok bahan baku dengan quantity resep
-              const possibleQuantities = p.product_ingredients.map((pi: any) => {
-                const availableIngStock = ingredientsMap.get(pi.ingredient_id) || 0;
-                return Math.floor(availableIngStock / pi.quantity);
+              const ingDetails = p.product_ingredients.map((pi: any) => {
+                const ing = ingredientsMap.get(pi.ingredient_id) as any;
+                const availableIngStock = ing?.current_stock || 0;
+                return {
+                  portions: Math.floor(availableIngStock / pi.quantity),
+                  rawStock: availableIngStock,
+                  yieldQty: ing?.yield_quantity || 1,
+                  unit: ing?.unit || ''
+                };
               });
-              // Ambil nilai terkecil (limiting ingredient)
-              maxStock = Math.min(...possibleQuantities);
+              
+              const limiting = ingDetails.reduce((min: any, curr: any) => curr.portions < min.portions ? curr : min, ingDetails[0]);
+              maxStock = limiting.portions;
+              
+              if (limiting && limiting.yieldQty > 1) {
+                rawStockInfo = `(≈ ${(limiting.rawStock / limiting.yieldQty).toFixed(2).replace(/\.?0+$/, '')} ${limiting.unit})`;
+              }
             }
             
-            return { ...p, stock: maxStock }; // Override stock property
+            return { ...p, stock: maxStock, rawStockInfo }; // Override stock property
           });
 
           setProducts(productsWithCalculatedStock);

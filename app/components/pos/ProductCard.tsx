@@ -11,6 +11,7 @@ interface ProductCardProps {
     categories?: { name: string };
     units?: { name: string };
     stock?: number;
+    rawStockInfo?: string;
   };
 }
 
@@ -48,6 +49,11 @@ export default function ProductCard({ product }: ProductCardProps) {
           </span>
           <span className="text-xs sm:text-sm text-slate-500">
             Stok: <strong className="text-slate-700">{product.stock || 0}</strong> {product.units?.name || ''}
+            {product.rawStockInfo && (
+              <span className="text-slate-400 ml-1 font-normal">
+                {product.rawStockInfo}
+              </span>
+            )}
           </span>
         </div>
       </div>

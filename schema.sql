@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.store_settings (
     address TEXT,
     tax_rate DECIMAL(5,2) DEFAULT 11.00,
     service_charge DECIMAL(5,2) DEFAULT 0.00,
+    wa_report_template TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

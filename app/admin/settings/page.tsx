@@ -67,7 +67,7 @@ export default function AdminSettings() {
         .update(payload)
         .eq('id', settingsId);
       
-      if (error) alert('Gagal menyimpan pengaturan.');
+      if (error) alert('Gagal menyimpan pengaturan.\n\nDetail: ' + error.message);
       else alert('Pengaturan berhasil disimpan!');
     } else {
       const { data, error } = await supabase
@@ -76,7 +76,7 @@ export default function AdminSettings() {
         .select()
         .single();
         
-      if (error) alert('Gagal menyimpan pengaturan.');
+      if (error) alert('Gagal menyimpan pengaturan.\n\nDetail: ' + error.message);
       else {
         setSettingsId(data.id);
         alert('Pengaturan berhasil disimpan!');
@@ -176,12 +176,22 @@ export default function AdminSettings() {
             <textarea 
               value={formData.wa_report_template}
               onChange={e => setFormData({...formData, wa_report_template: e.target.value})}
-              placeholder={`Laporan Hari Ini\n\nTotal Omzet: [OMZET]\nTunai: [TUNAI]\nQRIS: [QRIS]\n\nSisa Stok:\n[STOK]\n`}
+              placeholder="Klik tombol di bawah untuk mengisi template default..."
               className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 font-mono text-sm"
             ></textarea>
+            {!formData.wa_report_template && (
+              <button
+                type="button"
+                onClick={() => setFormData({...formData, wa_report_template: `Laporan Harian POS\n[TANGGAL]\n\nTotal Omzet: [OMZET]\nTunai: [TUNAI]\nQRIS: [QRIS]\n\nSisa Stok Bahan:\n[STOK]\n\nTerima kasih.`})}
+                className="mt-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-2"
+              >
+                📋 Gunakan Template Default
+              </button>
+            )}
             <div className="mt-3 bg-blue-50 p-4 rounded-xl border border-blue-100">
               <p className="text-sm text-blue-800 font-semibold mb-2">Variabel Dinamis (bisa disisipkan di atas):</p>
               <ul className="text-xs text-blue-700 space-y-1 font-mono">
+                <li><span className="font-bold">[TANGGAL]</span> : Hari dan tanggal saat laporan dibuat (contoh: Kamis, 24 Juli 2026)</li>
                 <li><span className="font-bold">[OMZET]</span> : Total penjualan keseluruhan hari ini</li>
                 <li><span className="font-bold">[TUNAI]</span> : Total uang tunai / cash yang diterima</li>
                 <li><span className="font-bold">[QRIS]</span> : Total pembayaran masuk via QRIS</li>

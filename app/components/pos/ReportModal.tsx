@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { X, Loader2, Send, TrendingUp, Banknote, QrCode, Package } from 'lucide-react';
+import { X, Loader2, Send, TrendingUp, Banknote, QrCode, Package, CalendarDays, FileText } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,6 +24,7 @@ export default function ReportModal({ onClose }: ReportModalProps) {
   
   const [ingredients, setIngredients] = useState<any[]>([]);
   const [waTemplate, setWaTemplate] = useState('');
+  const [deskripsi, setDeskripsi] = useState('');
 
   useEffect(() => {
     const fetchReportData = async () => {
@@ -55,7 +56,7 @@ export default function ReportModal({ onClose }: ReportModalProps) {
         // Fetch Ingredients Stock
         const { data: ingData, error: ingError } = await supabase
           .from('ingredients')
-          .select('id, name, current_stock, unit')
+          .select('id, name, current_stock, unit, yield_quantity, yield_unit')
           .order('name');
           
         if (ingData && !ingError) {
@@ -73,7 +74,7 @@ export default function ReportModal({ onClose }: ReportModalProps) {
           setWaTemplate(settingsData.wa_report_template);
         } else {
           // Default template if empty
-          setWaTemplate(`Laporan Harian POS\n\nTotal Omzet: [OMZET]\nTunai: [TUNAI]\nQRIS: [QRIS]\n\nSisa Stok Bahan:\n[STOK]\n\nTerima kasih.`);
+          setWaTemplate(`Laporan Harian POS\n[TANGGAL]\n\nTotal Omzet: [OMZET]\nTunai: [TUNAI]\nQRIS: [QRIS]\n\nSisa Stok Bahan:\n[STOK]\n\nTerima kasih.`);
         }
         
       } catch (err) {
@@ -100,16 +101,31 @@ export default function ReportModal({ onClose }: ReportModalProps) {
     message = message.replace(/\[OMZET\]/g, formatPrice(reportData.totalOmzet));
     message = message.replace(/\[TUNAI\]/g, formatPrice(reportData.totalCash));
     message = message.replace(/\[QRIS\]/g, formatPrice(reportData.totalQris));
+    message = message.replace(/\[TANGGAL\]/g, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
     
-    let stokText = ingredients.map(ing => `- ${ing.name}: ${ing.current_stock || 0} ${ing.unit}`).join('\n');
+    let stokText = ingredients.map(ing => {
+      const yieldQty = ing.yield_quantity || 1;
+      const stockInPurchaseUnit = (ing.current_stock || 0) / yieldQty;
+      const displayStock = Number.isInteger(stockInPurchaseUnit) ? stockInPurchaseUnit : stockInPurchaseUnit.toFixed(2).replace(/\.?0+$/, '');
+      return `- ${ing.name}: ${displayStock} ${ing.unit}`;
+    }).join('\n');
     if (!stokText) stokText = '- Data stok kosong -';
     
     message = message.replace(/\[STOK\]/g, stokText);
+    
+    // Append deskripsi di akhir pesan
+    if (deskripsi.trim()) {
+      message += '\n\nDeskripsi Orderan:\n' + deskripsi.trim();
+    }
     
     return encodeURIComponent(message);
   };
 
   const handleSendWa = () => {
+    if (!deskripsi.trim()) {
+      alert('Harap isi Deskripsi Orderan terlebih dahulu sebelum mengirim laporan.');
+      return;
+    }
     const text = generateWaMessage();
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
@@ -117,10 +133,16 @@ export default function ReportModal({ onClose }: ReportModalProps) {
   return (
     <div className="fixed inset-0 z-[100] bg-slate-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
       <div className="bg-white border-b border-slate-100 p-4 flex items-center justify-between shrink-0 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-          <TrendingUp className="text-blue-600" />
-          Laporan Harian Kasir
-        </h2>
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <TrendingUp className="text-blue-600" />
+            Laporan Harian Kasir
+          </h2>
+          <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5 ml-[28px]">
+            <CalendarDays size={14} className="text-slate-400" />
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
         <button 
           onClick={onClose}
           className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
@@ -192,16 +214,28 @@ export default function ReportModal({ onClose }: ReportModalProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {ingredients.map(ing => (
+                    {ingredients.map(ing => {
+                      const yieldQty = ing.yield_quantity || 1;
+                      const stockInPurchaseUnit = (ing.current_stock || 0) / yieldQty;
+                      const displayStock = Number.isInteger(stockInPurchaseUnit) ? stockInPurchaseUnit : stockInPurchaseUnit.toFixed(2).replace(/\.?0+$/, '');
+                      return (
                       <tr key={ing.id} className="hover:bg-slate-50 transition-colors">
                         <td className="p-4 pl-6 font-semibold text-slate-700">{ing.name}</td>
                         <td className="p-4 pr-6 text-right">
-                          <span className="inline-flex items-center px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold text-sm border border-emerald-200">
-                            {ing.current_stock || 0} {ing.unit}
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="inline-flex items-center px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold text-sm border border-emerald-200">
+                              {displayStock} {ing.unit}
+                            </span>
+                            {yieldQty > 1 && (
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                = {ing.current_stock || 0} {ing.yield_unit || ing.unit}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     {ingredients.length === 0 && (
                       <tr>
                         <td colSpan={2} className="p-6 text-center text-slate-400">Belum ada data bahan baku.</td>
@@ -218,14 +252,35 @@ export default function ReportModal({ onClose }: ReportModalProps) {
 
       {/* Floating Bottom Action */}
       {!isLoading && (
-        <div className="p-4 md:p-6 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex justify-center shrink-0 z-50 relative">
-          <button 
-            onClick={handleSendWa}
-            className="w-full max-w-3xl py-4 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white rounded-2xl font-bold text-lg shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-3 transition-all"
-          >
-            <Send size={24} />
-            Kirim Laporan ke WA
-          </button>
+        <div className="p-4 md:p-6 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] shrink-0 z-50 relative">
+          <div className="max-w-3xl mx-auto space-y-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <FileText size={14} className="text-slate-500" />
+                Deskripsi Orderan <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={deskripsi}
+                onChange={(e) => setDeskripsi(e.target.value)}
+                placeholder="Tulis deskripsi orderan hari ini... (wajib diisi)"
+                className={`w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none h-24 transition-colors ${
+                  !deskripsi.trim() ? 'border-red-300 bg-red-50/50' : 'border-slate-200 bg-white'
+                }`}
+              />
+            </div>
+            <button 
+              onClick={handleSendWa}
+              disabled={!deskripsi.trim()}
+              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-3 transition-all active:scale-[0.98] ${
+                deskripsi.trim()
+                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/30'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+              }`}
+            >
+              <Send size={24} />
+              Kirim Laporan ke WA
+            </button>
+          </div>
         </div>
       )}
     </div>

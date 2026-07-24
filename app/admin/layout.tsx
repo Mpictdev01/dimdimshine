@@ -4,6 +4,12 @@ import Sidebar from '@/app/components/admin/Sidebar';
 export const metadata = {
   title: 'DIMDIM SHINE Backoffice',
   description: 'Dashboard Admin POS Cloud',
+  manifest: '/manifest-admin.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'DIMDIM SHINE Backoffice',
+  },
 };
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

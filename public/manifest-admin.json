@@ -1,0 +1,21 @@
+{
+  "name": "DIMDIM SHINE Backoffice",
+  "short_name": "Backoffice",
+  "description": "DIMDIM SHINE Admin Panel and Dashboard",
+  "start_url": "/admin",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/DIMDIM_SHINE.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/DIMDIM_SHINE.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

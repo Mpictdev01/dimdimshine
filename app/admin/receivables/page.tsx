@@ -95,13 +95,13 @@ export default function AdminReceivables() {
   const totalPiutang = transactions.reduce((sum, tx) => sum + tx.total, 0);
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-end mb-8 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-end mb-4 md:mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Manajemen Piutang</h1>
-          <p className="text-slate-500">Kelola tagihan pelanggan (Kasbon/Tempo) yang belum lunas.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Manajemen Piutang</h1>
+          <p className="text-slate-500 text-sm">Kelola tagihan pelanggan (Kasbon/Tempo) yang belum lunas.</p>
         </div>
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-6 py-3 rounded-2xl flex flex-col items-end">
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-6 py-3 rounded-2xl flex flex-col items-end self-start sm:self-auto w-full sm:w-auto">
           <span className="text-sm font-medium opacity-80">Total Piutang Berjalan</span>
           <span className="text-2xl font-bold">{formatPrice(totalPiutang)}</span>
         </div>
@@ -109,7 +109,7 @@ export default function AdminReceivables() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-          <div className="relative w-80">
+          <div className="relative w-full sm:w-80">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <Search size={18} />
             </div>

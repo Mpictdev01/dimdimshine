@@ -95,10 +95,10 @@ export default function AdminSettings() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="p-8 max-w-4xl h-full flex flex-col">
-      <div className="mb-8 shrink-0">
-        <h1 className="text-2xl font-bold text-slate-800">Pengaturan Sistem</h1>
-        <p className="text-slate-500">Konfigurasi profil bisnis, pajak, dan cetakan struk.</p>
+    <form onSubmit={handleSubmit} className="p-4 md:p-8 max-w-4xl h-full flex flex-col">
+      <div className="mb-6 md:mb-8 shrink-0">
+        <h1 className="text-xl md:text-2xl font-bold text-slate-800">Pengaturan Sistem</h1>
+        <p className="text-slate-500 text-sm">Konfigurasi profil bisnis, pajak, dan cetakan struk.</p>
       </div>
 
       <div className="space-y-6 flex-1 overflow-y-auto pr-2 pb-8">
@@ -137,7 +137,7 @@ export default function AdminSettings() {
             <Calculator className="text-blue-600" size={20} />
             <h2 className="font-bold text-slate-800">Pajak & Biaya Layanan</h2>
           </div>
-          <div className="p-6 grid grid-cols-2 gap-6">
+          <div className="p-4 md:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">PPN (%)</label>
               <input 

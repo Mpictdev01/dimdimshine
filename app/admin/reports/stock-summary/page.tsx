@@ -99,15 +99,15 @@ export default function StockSummaryPage() {
   const totalStockCount = filteredProducts.reduce((sum, p) => sum + (p.stock || 0), 0);
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-center mb-6 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-6 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Rekap Stok & Nilai Aset</h1>
-          <p className="text-slate-500">Laporan status jumlah barang fisik di gudang saat ini (Inventory Valuation).</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Rekap Stok & Nilai Aset</h1>
+          <p className="text-slate-500 text-sm">Laporan status jumlah barang fisik di gudang saat ini (Inventory Valuation).</p>
         </div>
         <button 
           onClick={exportToExcel}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm self-start sm:self-auto"
         >
           <FileSpreadsheet size={20} />
           Export Excel
@@ -115,7 +115,7 @@ export default function StockSummaryPage() {
       </div>
 
       {/* Filter Section */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6 shrink-0 flex gap-4">
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6 shrink-0 flex flex-col md:flex-row gap-4">
         <div className="flex-1">
           <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Pencarian</label>
           <div className="relative">

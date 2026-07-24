@@ -231,7 +231,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-slate-50">
+    <div className="p-4 md:p-8 h-full overflow-y-auto bg-slate-50">
       <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Dashboard Utama</h1>

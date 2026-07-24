@@ -110,8 +110,8 @@ export default function Sidebar() {
 
       <div 
         className={clsx(
-          "bg-slate-900 text-slate-300 flex flex-col h-screen transition-all duration-300 z-50 relative",
-          "fixed inset-y-0 left-0 lg:static lg:translate-x-0",
+          "bg-slate-900 text-slate-300 flex flex-col h-screen transition-all duration-300 z-50",
+          "fixed inset-y-0 left-0 lg:static lg:relative lg:translate-x-0",
           isCollapsed ? "lg:w-20" : "lg:w-64",
           "w-64",
           isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"

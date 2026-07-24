@@ -183,15 +183,15 @@ export default function RecapReportPage() {
   };
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-center mb-6 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-6 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Rekap Penjualan</h1>
-          <p className="text-slate-500">Laporan komprehensif penjualan dengan filter detail.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Rekap Penjualan</h1>
+          <p className="text-slate-500 text-sm">Laporan komprehensif penjualan dengan filter detail.</p>
         </div>
         <button 
           onClick={exportToExcel}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm self-start sm:self-auto"
         >
           <FileSpreadsheet size={20} />
           Export Excel

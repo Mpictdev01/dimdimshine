@@ -150,15 +150,15 @@ export default function AdminPurchases() {
     : ingredients.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-center mb-8 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Pembelian (Barang Masuk)</h1>
-          <p className="text-slate-500">Catat pembelian dari supplier/pabrik untuk menambah stok secara otomatis.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Pembelian (Barang Masuk)</h1>
+          <p className="text-slate-500 text-sm">Catat pembelian dari supplier/pabrik untuk menambah stok secara otomatis.</p>
         </div>
         <button 
           onClick={openModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm self-start sm:self-auto"
         >
           <ShoppingCart size={20} />
           Catat Pembelian Baru
@@ -230,7 +230,7 @@ export default function AdminPurchases() {
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Pilih Supplier</label>
                   <select 
@@ -367,8 +367,7 @@ export default function AdminPurchases() {
               )}
             </div>
 
-            {/* Footer Total & Submit */}
-            <div className="border-t border-slate-200 bg-white p-6 shrink-0 flex items-center justify-between">
+            <div className="border-t border-slate-200 bg-white p-4 md:p-6 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-slate-500 mb-1">Total Tagihan Pembelian</p>
                 <p className="text-2xl font-bold text-slate-800">{formatPrice(totalAmount)}</p>

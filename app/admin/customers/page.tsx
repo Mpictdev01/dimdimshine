@@ -119,15 +119,15 @@ export default function AdminCustomers() {
   });
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-center mb-8 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Daftar Toko Pelanggan</h1>
-          <p className="text-slate-500">Kelola daftar toko yang rutin memesan barang ke Anda.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Daftar Toko Pelanggan</h1>
+          <p className="text-slate-500 text-sm">Kelola daftar toko yang rutin memesan barang ke Anda.</p>
         </div>
         <button 
           onClick={() => openModal()}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm self-start sm:self-auto"
         >
           <Plus size={20} />
           Tambah Toko Baru
@@ -136,7 +136,7 @@ export default function AdminCustomers() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
         <div className="p-4 border-b border-slate-100 flex gap-4 items-center bg-slate-50 shrink-0">
-          <div className="relative w-72">
+          <div className="relative w-full sm:w-72">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <Search size={18} />
             </div>

@@ -196,15 +196,15 @@ export default function StockAdjustments() {
   const searchedIngredients = ingredients.filter(i => i.name.toLowerCase().includes(ingredientSearch.toLowerCase()));
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-center mb-8 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Riwayat Penyesuaian Stok (Stock Opname)</h1>
-          <p className="text-slate-500">Catatan jejak audit (Audit Trail) untuk semua perubahan stok manual.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Riwayat Penyesuaian Stok (Stock Opname)</h1>
+          <p className="text-slate-500 text-sm">Catatan jejak audit (Audit Trail) untuk semua perubahan stok manual.</p>
         </div>
         <button 
           onClick={openModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm self-start sm:self-auto"
         >
           <ClipboardEdit size={20} />
           Catat Penyesuaian Baru
@@ -213,7 +213,7 @@ export default function StockAdjustments() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-          <div className="relative w-72">
+          <div className="relative w-full sm:w-72">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <Search size={18} />
             </div>
@@ -379,9 +379,9 @@ export default function StockAdjustments() {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-auto p-6 flex gap-6">
+              <div className="flex-1 overflow-auto p-4 md:p-6 flex flex-col md:flex-row gap-6">
                 {/* Kiri: Pilih Item */}
-                <div className="w-1/2 flex flex-col border-r border-slate-100 pr-6">
+                <div className="w-full md:w-1/2 flex flex-col border-b md:border-b-0 md:border-r border-slate-100 pb-6 md:pb-0 md:pr-6">
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Pilih {activeTab === 'product' ? 'Produk' : 'Bahan Baku'}</label>
                   <div className="relative mb-4">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -449,7 +449,7 @@ export default function StockAdjustments() {
                 </div>
 
                 {/* Kanan: Form Penyesuaian */}
-                <div className="w-1/2 flex flex-col">
+                <div className="w-full md:w-1/2 flex flex-col">
                   {selectedItem ? (
                     <form id="adjustment-form" onSubmit={handleSubmit} className="space-y-4">
                       <div className={clsx("p-4 rounded-xl border mb-2", activeTab === 'product' ? "bg-blue-50/50 border-blue-100" : "bg-purple-50/50 border-purple-100")}>
@@ -486,7 +486,7 @@ export default function StockAdjustments() {
 
                       {reason && (
                         <>
-                          <div className="grid grid-cols-3 gap-3 items-end">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                             <div>
                               <label className="block text-xs font-semibold text-slate-700 mb-1">Stok Fisik Saat Ini</label>
                               <div className="h-11 px-3 bg-slate-100 rounded-xl border border-slate-200 text-slate-500 font-medium flex items-center justify-center">

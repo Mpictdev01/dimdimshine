@@ -179,11 +179,11 @@ export default function AdminStockReport() {
   });
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-center mb-8 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Riwayat Pergerakan Stok</h1>
-          <p className="text-slate-500">Buku besar riwayat pergerakan keluar dan masuk barang (Inventory Ledger).</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Riwayat Pergerakan Stok</h1>
+          <p className="text-slate-500 text-sm">Buku besar riwayat pergerakan keluar dan masuk barang (Inventory Ledger).</p>
         </div>
       </div>
 

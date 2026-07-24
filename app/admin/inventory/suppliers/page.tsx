@@ -100,15 +100,15 @@ export default function AdminSuppliers() {
   };
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-center mb-8 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Data Supplier / Pabrik</h1>
-          <p className="text-slate-500">Kelola daftar pihak tempat Anda menyetok barang jualan.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Data Supplier / Pabrik</h1>
+          <p className="text-slate-500 text-sm">Kelola daftar pihak tempat Anda menyetok barang jualan.</p>
         </div>
         <button 
           onClick={() => openModal()}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm self-start sm:self-auto"
         >
           <Plus size={20} />
           Tambah Supplier

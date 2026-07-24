@@ -165,18 +165,18 @@ export default function AdminSalesReports() {
   };
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-center mb-8 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Riwayat Penjualan & Cetak</h1>
-          <p className="text-slate-500">Lihat semua riwayat transaksi dari POS dan cetak Surat Jalan / Faktur.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Riwayat Penjualan & Cetak</h1>
+          <p className="text-slate-500 text-sm">Lihat semua riwayat transaksi dari POS dan cetak Surat Jalan / Faktur.</p>
         </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
         <div className="p-4 border-b border-slate-100 flex flex-col gap-4 bg-slate-50 shrink-0">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="relative w-80">
+            <div className="relative w-full sm:w-80">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                 <Search size={18} />
               </div>

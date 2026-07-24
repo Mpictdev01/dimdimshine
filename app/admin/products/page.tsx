@@ -233,15 +233,15 @@ export default function AdminProducts() {
   );
 
   return (
-    <div className="p-8 h-full relative flex flex-col">
-      <div className="flex justify-between items-center mb-8 shrink-0">
+    <div className="p-4 md:p-8 h-full relative flex flex-col overflow-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Library Produk</h1>
-          <p className="text-slate-500">Kelola menu makanan dan minuman.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Library Produk</h1>
+          <p className="text-slate-500 text-sm">Kelola menu makanan dan minuman.</p>
         </div>
         <button 
           onClick={() => openModal()}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm self-start sm:self-auto"
         >
           <Plus size={20} />
           Tambah Produk
@@ -250,7 +250,7 @@ export default function AdminProducts() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-          <div className="relative w-72">
+          <div className="relative w-full sm:w-72">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <Search size={18} />
             </div>
@@ -370,11 +370,11 @@ export default function AdminProducts() {
       {/* Full Page Modal (Overlay) */}
       <div 
         className={clsx(
-          "absolute inset-0 z-50 bg-white flex flex-col transition-transform duration-300",
-          isModalOpen ? "translate-y-0" : "translate-y-full"
+          "fixed inset-0 z-50 bg-white flex flex-col transition-all duration-300",
+          isModalOpen ? "translate-y-0 opacity-100 visible" : "translate-y-full opacity-0 invisible pointer-events-none"
         )}
       >
-        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50">
+        <div className="flex items-center justify-between px-4 md:px-8 py-4 md:py-6 border-b border-slate-100 bg-slate-50">
           <div>
             <h2 className="text-2xl font-bold text-slate-800">{editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}</h2>
             <p className="text-slate-500 text-sm mt-1">Masukkan detail produk untuk menu POS.</p>
@@ -387,8 +387,8 @@ export default function AdminProducts() {
           </button>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50 flex justify-center">
-          <form onSubmit={handleSubmit} className="w-full max-w-2xl bg-white p-8 rounded-3xl shadow-sm border border-slate-100 h-fit space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/50 flex justify-center">
+          <form onSubmit={handleSubmit} className="w-full max-w-2xl bg-white p-4 md:p-8 rounded-3xl shadow-sm border border-slate-100 h-fit space-y-6">
             
             <div className="space-y-4">
               <div>
@@ -403,7 +403,7 @@ export default function AdminProducts() {
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Kategori</label>
                   <select 

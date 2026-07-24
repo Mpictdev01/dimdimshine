@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { Download, X, Share } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 export default function InstallPrompt() {
   const [isReadyForInstall, setIsReadyForInstall] = useState(false);
   const [showIosPrompt, setShowIosPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  const pathname = usePathname();
 
   useEffect(() => {
     // Check if already installed
@@ -60,22 +63,28 @@ export default function InstallPrompt() {
 
   if (!isReadyForInstall && !showIosPrompt) return null;
 
+  const isAdmin = pathname?.startsWith('/admin');
+  const appName = isAdmin ? "DIMDIM SHINE Backoffice" : "DIMDIM SHINE POS";
+  const appDesc = isAdmin 
+    ? "Kelola toko dan laporan lebih mudah dari layar beranda Anda."
+    : "Akses kasir lebih cepat dan lancar dari layar beranda Anda.";
+
   return (
     <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white border border-zinc-200 shadow-2xl rounded-xl p-4 z-50 flex flex-col sm:flex-row items-center gap-4 transition-all duration-500 ease-out transform translate-y-0">
       <div className="bg-zinc-100 p-3 rounded-lg flex-shrink-0">
-        <img src="/DIMDIM_SHINE.png" alt="DIMDIM SHINE Icon" className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
+        <img src="/DIMDIM_SHINE.png" alt={`${appName} Icon`} className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
         {/* Fallback icon if image fails to load */}
         <Download className="w-8 h-8 text-zinc-900 absolute top-3 left-3 opacity-0" style={{ zIndex: -1 }} />
       </div>
       
       <div className="flex-1 text-center sm:text-left">
-        <h3 className="font-semibold text-zinc-900 text-sm">Install DIMDIM SHINE App</h3>
+        <h3 className="font-semibold text-zinc-900 text-sm">Install {appName}</h3>
         {showIosPrompt ? (
           <p className="text-xs text-zinc-500 mt-1">
             Tekan icon <Share className="inline w-3 h-3 mx-1 mb-1 text-blue-500" /> di menu bawah layar Anda, lalu pilih <strong>"Add to Home Screen"</strong>.
           </p>
         ) : (
-          <p className="text-xs text-zinc-500 mt-1">Akses lebih cepat dan lancar dari layar beranda Anda.</p>
+          <p className="text-xs text-zinc-500 mt-1">{appDesc}</p>
         )}
       </div>
 

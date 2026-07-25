@@ -83,10 +83,11 @@ export async function createPurchase(
         
         const newStock = (ing.current_stock || 0) + convertedStock;
         
-        // Ingredients table doesn't have cost_price in our final schema
+        // Ingredients table doesn't have cost_price in our final schema initially, but we added it
+        const unitCostPrice = item.buy_price / yieldQty;
         const { error: updateError } = await supabase
           .from('ingredients')
-          .update({ current_stock: newStock })
+          .update({ current_stock: newStock, cost_price: unitCostPrice })
           .eq('id', item.ingredient_id);
           
         if (updateError) throw updateError;

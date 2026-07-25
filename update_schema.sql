@@ -28,3 +28,6 @@ ALTER TABLE public.ingredients ADD COLUMN IF NOT EXISTS yield_unit VARCHAR(50);
 -- 6. Dukungan Opname untuk Bahan Baku
 ALTER TABLE public.stock_adjustments ADD COLUMN IF NOT EXISTS ingredient_id UUID REFERENCES public.ingredients(id) ON DELETE CASCADE;
 ALTER TABLE public.stock_adjustments ALTER COLUMN product_id DROP NOT NULL;
+
+-- 7. Add cost_price to ingredients to track HPP correctly
+ALTER TABLE public.ingredients ADD COLUMN IF NOT EXISTS cost_price DECIMAL(12,2) NOT NULL DEFAULT 0;

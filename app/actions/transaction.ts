@@ -45,14 +45,45 @@ export async function processTransaction(payload: any) {
 
     const productsMap = new Map(products?.map(p => [p.id, p]) || []);
 
+    // Fetch ingredient costs to dynamically calculate BOM cost
+    let ingredientIds: string[] = [];
+    products?.forEach(p => {
+      if (p.product_ingredients) {
+        p.product_ingredients.forEach((pi: any) => ingredientIds.push(pi.ingredient_id));
+      }
+    });
+    
+    let ingredientsMap = new Map();
+    if (ingredientIds.length > 0) {
+      const { data: ingredients } = await supabase
+        .from('ingredients')
+        .select('id, cost_price')
+        .in('id', ingredientIds);
+      ingredientsMap = new Map(ingredients?.map(i => [i.id, i]) || []);
+    }
+
     // 2. Create transaction items
-    const txItems = items.map((item: any) => ({
-      transaction_id: transaction.id,
-      product_id: item.productId,
-      quantity: item.quantity,
-      price: item.price,
-      cost_price: productsMap.get(item.productId)?.cost_price || 0
-    }));
+    const txItems = items.map((item: any) => {
+      const prod = productsMap.get(item.productId);
+      let calculatedCostPrice = prod?.cost_price || 0;
+      
+      if (prod?.product_ingredients && prod.product_ingredients.length > 0) {
+        let bomCost = 0;
+        for (const pi of prod.product_ingredients) {
+          const ing = ingredientsMap.get(pi.ingredient_id);
+          bomCost += (ing?.cost_price || 0) * pi.quantity;
+        }
+        calculatedCostPrice = bomCost;
+      }
+
+      return {
+        transaction_id: transaction.id,
+        product_id: item.productId,
+        quantity: item.quantity,
+        price: item.price,
+        cost_price: calculatedCostPrice
+      };
+    });
 
     const { error: itemsError } = await supabase
       .from('transaction_items')

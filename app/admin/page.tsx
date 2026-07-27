@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { Banknote, TrendingUp, PackageSearch, AlertTriangle, Loader2, ArrowRight, Filter } from 'lucide-react';
+import { Banknote, TrendingUp, PackageSearch, AlertTriangle, Loader2, ArrowRight, Filter, ShoppingBag } from 'lucide-react';
 import Link from 'next/link';
 
 const supabase = createClient(
@@ -20,12 +20,16 @@ export default function AdminDashboard() {
     netProfitTotal: 0,
     piutangTotal: 0,
     purchasesTotal: 0,
+    cashTotal: 0,
+    qrisTotal: 0,
   });
 
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
+  const [categorySales, setCategorySales] = useState<{productName: string; totalQty: number; unitName: string}[]>([]);
 
   // Master data for filters
-  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [categoryProductIds, setCategoryProductIds] = useState<Set<string>>(new Set());
 
   // Filter Input States
   const today = new Date();
@@ -33,14 +37,15 @@ export default function AdminDashboard() {
   const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState(todayStr);
   const [selectedPayment, setSelectedPayment] = useState('all');
-  const [selectedProduct, setSelectedProduct] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   // Active Filter States (applied when button is clicked)
   const [activeFilters, setActiveFilters] = useState({
     startDate: todayStr,
     endDate: todayStr,
     payment: 'all',
-    product: 'all'
+    category: 'all',
+    categoryProductIds: new Set<string>()
   });
 
   // Initial Data Fetching (Master Data)
@@ -52,10 +57,10 @@ export default function AdminDashboard() {
     }
     
     const fetchMasterData = async () => {
-      const [prodRes] = await Promise.all([
-        supabase.from('products').select('id, name').order('name')
+      const [catRes] = await Promise.all([
+        supabase.from('categories').select('id, name').order('name')
       ]);
-      if (prodRes.data) setProducts(prodRes.data);
+      if (catRes.data) setCategories(catRes.data);
     };
     
     fetchMasterData();
@@ -74,7 +79,7 @@ export default function AdminDashboard() {
         // 1. Fetch transactions (Sales, Profit, Piutang)
         let txQuery = supabase
           .from('transactions')
-          .select('total, subtotal, customer_id, payment_status, transaction_items(product_id, quantity, price, cost_price)')
+          .select('total, subtotal, customer_id, payment_status, payment_method, transaction_items(product_id, quantity, price, cost_price)')
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
           
@@ -87,14 +92,34 @@ export default function AdminDashboard() {
         let totalSales = 0;
         let totalNetProfit = 0;
         let totalPiutangAmount = 0;
+        let totalCash = 0;
+        let totalQris = 0;
+
+        // Fetch all products with category + unit for aggregation
+        const { data: allProducts } = await supabase
+          .from('products')
+          .select('id, name, category_id, categories(name), units(name)');
+        const productMap = new Map<string, { productName: string; categoryName: string; unitName: string }>();
+        if (allProducts) {
+          for (const p of allProducts) {
+            productMap.set(p.id, {
+              productName: p.name,
+              categoryName: (p.categories as any)?.name || 'Tanpa Kategori',
+              unitName: (p.units as any)?.name || 'pcs',
+            });
+          }
+        }
+
+        // Aggregation map: productId -> { productName, totalQty, unitName }
+        const prodSalesMap = new Map<string, { productName: string; totalQty: number; unitName: string }>();
 
         if (salesData) {
           let filteredSales = salesData;
           
-          // JS filter for products if selected
-          if (activeFilters.product !== 'all') {
+          // JS filter for category if selected
+          if (activeFilters.category !== 'all' && activeFilters.categoryProductIds.size > 0) {
             filteredSales = filteredSales.filter((tx: any) => 
-              tx.transaction_items?.some((item: any) => item.product_id === activeFilters.product)
+              tx.transaction_items?.some((item: any) => activeFilters.categoryProductIds.has(item.product_id))
             );
           }
 
@@ -103,15 +128,11 @@ export default function AdminDashboard() {
             let txProfit = 0;
             let txPiutang = 0;
 
-            if (activeFilters.product !== 'all') {
-              // Jika filter produk aktif, HANYA hitung nominal untuk produk tersebut
+            if (activeFilters.category !== 'all' && activeFilters.categoryProductIds.size > 0) {
               if (tx.transaction_items) {
                 for (const item of tx.transaction_items) {
-                  if (item.product_id === activeFilters.product) {
+                  if (activeFilters.categoryProductIds.has(item.product_id)) {
                     const itemTotal = (item.price || 0) * item.quantity;
-                    // Tambahkan proporsi pajak (misal 11%) agar 'Penjualan' tetap akurat
-                    // Karena tx.total mengandung pajak, kita asumsikan item.price belum pajak (kecuali disetting include tax)
-                    // Untuk amannya, kita ambil harga jual kotor barang tersebut
                     txSales += itemTotal; 
                     
                     const costPrice = item.cost_price || 0;
@@ -123,7 +144,6 @@ export default function AdminDashboard() {
                 txPiutang += txSales;
               }
             } else {
-              // Jika semua produk, ambil total dari transaksi
               txSales = tx.total || 0;
               if (tx.payment_status === 'unpaid') {
                 txPiutang = tx.total || 0;
@@ -137,11 +157,41 @@ export default function AdminDashboard() {
               }
             }
 
+            // Aggregate qty per product
+            if (tx.transaction_items) {
+              for (const item of tx.transaction_items) {
+                if (activeFilters.category !== 'all' && activeFilters.categoryProductIds.size > 0 && !activeFilters.categoryProductIds.has(item.product_id)) {
+                  continue;
+                }
+                const info = productMap.get(item.product_id);
+                if (info) {
+                  const existing = prodSalesMap.get(item.product_id);
+                  if (existing) {
+                    existing.totalQty += item.quantity;
+                  } else {
+                    prodSalesMap.set(item.product_id, { productName: info.productName, totalQty: item.quantity, unitName: info.unitName });
+                  }
+                }
+              }
+            }
+
             totalSales += txSales;
             totalNetProfit += txProfit;
             totalPiutangAmount += txPiutang;
+
+            // Breakdown by payment method
+            if ((tx as any).payment_method === 'cash') {
+              totalCash += txSales;
+            } else if ((tx as any).payment_method === 'qris') {
+              totalQris += txSales;
+            }
           }
         }
+
+        // Convert map to sorted array
+        const prodSalesArr = Array.from(prodSalesMap.values())
+          .sort((a, b) => b.totalQty - a.totalQty);
+        setCategorySales(prodSalesArr);
 
         // 2. Pembelian (Berdasarkan filter tanggal)
         let purchaseQuery = supabase
@@ -155,9 +205,9 @@ export default function AdminDashboard() {
         let totalPurchases = 0;
         if (purchaseData) {
           let filteredPurchases = purchaseData;
-          if (activeFilters.product !== 'all') {
+          if (activeFilters.category !== 'all' && activeFilters.categoryProductIds.size > 0) {
             filteredPurchases = filteredPurchases.filter((p: any) => 
-              p.purchase_items?.some((item: any) => item.product_id === activeFilters.product)
+              p.purchase_items?.some((item: any) => activeFilters.categoryProductIds.has(item.product_id))
             );
           }
           totalPurchases = filteredPurchases.reduce((sum, p) => sum + p.total_amount, 0);
@@ -198,7 +248,9 @@ export default function AdminDashboard() {
           salesTotal: totalSales, 
           netProfitTotal: totalNetProfit, 
           piutangTotal: totalPiutangAmount, 
-          purchasesTotal: totalPurchases 
+          purchasesTotal: totalPurchases,
+          cashTotal: totalCash,
+          qrisTotal: totalQris
         });
         
         if (lowStock) setLowStockProducts(lowStock);
@@ -213,12 +265,19 @@ export default function AdminDashboard() {
     fetchDashboardData();
   }, [activeFilters]);
 
-  const handleApplyFilter = () => {
+  const handleApplyFilter = async () => {
+    let prodIds = new Set<string>();
+    if (selectedCategory !== 'all') {
+      const { data } = await supabase.from('products').select('id').eq('category_id', selectedCategory);
+      if (data) prodIds = new Set(data.map(p => p.id));
+    }
+    setCategoryProductIds(prodIds);
     setActiveFilters({
       startDate,
       endDate,
       payment: selectedPayment,
-      product: selectedProduct
+      category: selectedCategory,
+      categoryProductIds: prodIds
     });
   };
 
@@ -280,15 +339,15 @@ export default function AdminDashboard() {
         </div>
         
         <div className="w-full lg:w-1/4">
-          <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Produk Spesifik</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Kategori Produk</label>
           <select 
-            value={selectedProduct} 
-            onChange={(e) => setSelectedProduct(e.target.value)}
+            value={selectedCategory} 
+            onChange={(e) => setSelectedCategory(e.target.value)}
             className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors bg-slate-50 hover:bg-white text-sm font-medium text-slate-700"
           >
-            <option value="all">Semua Produk</option>
-            {products.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+            <option value="all">Semua Kategori</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
         </div>
@@ -310,7 +369,7 @@ export default function AdminDashboard() {
       ) : (
         <>
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group">
               <div className="absolute -right-6 -top-6 text-blue-50 opacity-50 group-hover:scale-110 transition-transform">
                 <TrendingUp size={120} />
@@ -323,6 +382,10 @@ export default function AdminDashboard() {
               </div>
               <div title={formatPrice(stats.salesTotal)} className="text-3xl lg:text-xl xl:text-2xl 2xl:text-3xl font-black text-slate-800 relative z-10 break-words">
                 {formatPrice(stats.salesTotal)}
+              </div>
+              <div className="relative z-10 mt-3 flex flex-col gap-0.5 text-xs font-medium">
+                <span className="text-slate-500">Tunai: <span className="text-slate-700 font-bold">{formatPrice(stats.cashTotal)}</span></span>
+                <span className="text-slate-500">QRIS: <span className="text-slate-700 font-bold">{formatPrice(stats.qrisTotal)}</span></span>
               </div>
             </div>
             
@@ -341,23 +404,6 @@ export default function AdminDashboard() {
               </div>
             </div>
             
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group">
-              <div className="absolute -right-6 -top-6 text-amber-50 opacity-50 group-hover:scale-110 transition-transform">
-                <Banknote size={120} />
-              </div>
-              <div className="flex items-center gap-3 text-slate-600 mb-2 relative z-10">
-                <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
-                  <Banknote size={20} />
-                </div>
-                <span className="font-semibold text-sm uppercase tracking-wide">Piutang (Periode Ini)</span>
-              </div>
-              <div title={formatPrice(stats.piutangTotal)} className="text-3xl lg:text-xl xl:text-2xl 2xl:text-3xl font-black text-slate-800 relative z-10 break-words">
-                {formatPrice(stats.piutangTotal)}
-              </div>
-              <Link href="/admin/receivables" className="relative z-10 mt-3 text-sm text-amber-700 font-medium inline-flex items-center gap-1 hover:gap-2 transition-all w-max">
-                Lihat Detail Piutang <ArrowRight size={14} />
-              </Link>
-            </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group">
               <div className="absolute -right-6 -top-6 text-indigo-50 opacity-50 group-hover:scale-110 transition-transform">
@@ -375,6 +421,39 @@ export default function AdminDashboard() {
               <Link href="/admin/inventory/purchases" className="relative z-10 mt-3 text-sm text-indigo-700 font-medium inline-flex items-center gap-1 hover:gap-2 transition-all w-max">
                 Catat Barang Masuk <ArrowRight size={14} />
               </Link>
+            </div>
+          </div>
+
+          {/* Detail Produk Terjual */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-8">
+            <div className="p-5 border-b border-slate-100 bg-blue-50/50 flex items-center gap-3">
+              <div className="p-2 bg-blue-100 text-blue-600 rounded-full">
+                <ShoppingBag size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Detail Produk Terjual</h2>
+                <p className="text-sm text-slate-500">Jumlah setiap produk yang terjual pada periode ini.</p>
+              </div>
+            </div>
+            <div className="p-5">
+              {categorySales.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {categorySales.map((item) => (
+                    <div key={item.productName} className="bg-slate-50 hover:bg-blue-50/60 border border-slate-100 rounded-xl p-4 transition-colors">
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-1 truncate" title={item.productName}>{item.productName}</p>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-2xl font-black text-slate-800">{item.totalQty.toLocaleString('id-ID')}</span>
+                        <span className="text-sm font-medium text-slate-500">{item.unitName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-400">
+                  <ShoppingBag size={36} className="mx-auto mb-2 opacity-40" />
+                  <p className="font-medium">Belum ada data penjualan pada periode ini.</p>
+                </div>
+              )}
             </div>
           </div>
 

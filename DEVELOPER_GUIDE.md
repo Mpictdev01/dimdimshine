@@ -319,3 +319,10 @@ npm start
 Pastikan file `.env.local` sudah terisi dengan benar sebelum menjalankan.
 
 Semoga panduan ini membantu Anda memahami *codebase* DIMDIM SHINE POS dengan cepat! 🚀
+
+---
+
+## 🤖 AI Agent Guidelines
+
+- Untuk menghemat token (*token efficiency*), AI Agent dilarang memuat seluruh isi dokumen ini ke dalam *system prompt* atau memori secara permanen.
+- AI Agent **DIWAJIBKAN** untuk menggunakan *tool* pembaca file (seperti `view_file` atau `read_file`) untuk membaca dokumen `DEVELOPER_GUIDE.md` ini setiap kali membutuhkan konteks mengenai struktur proyek, aturan state management, atau pedoman teknis, sebelum memberikan jawaban, usulan, maupun modifikasi kode.

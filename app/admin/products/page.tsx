@@ -223,14 +223,19 @@ export default function AdminProducts() {
     setFormData({ ...formData, ingredients: newIngredients });
   };
 
+  const [selectedCategory, setSelectedCategory] = useState('all');
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
   };
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (p.categories?.name && p.categories.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredProducts = products.filter(p => {
+    const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (p.categories?.name && p.categories.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchCategory = selectedCategory === 'all' || 
+      (selectedCategory === 'uncategorized' ? !p.category_id : p.category_id === selectedCategory);
+    return matchSearch && matchCategory;
+  });
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col overflow-hidden">
@@ -249,18 +254,32 @@ export default function AdminProducts() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-          <div className="relative w-full sm:w-72">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={18} />
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3 justify-between items-center bg-slate-50 shrink-0">
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto flex-1">
+            <div className="relative w-full sm:w-72">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <Search size={18} />
+              </div>
+              <input
+                type="text"
+                placeholder="Cari nama produk..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Cari nama atau kategori..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            />
+
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full sm:w-56 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            >
+              <option value="all">Semua Kategori</option>
+              {categories.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+              <option value="uncategorized">Tanpa Kategori</option>
+            </select>
           </div>
         </div>
 
@@ -336,7 +355,7 @@ export default function AdminProducts() {
                 
                 {filteredProducts.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500">
+                    <td colSpan={6} className="p-8 text-center text-slate-500">
                       Tidak ada produk yang ditemukan.
                     </td>
                   </tr>

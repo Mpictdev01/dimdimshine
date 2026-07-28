@@ -114,9 +114,24 @@ export default function AdminIngredients() {
     setIsSubmitting(false);
   };
 
-  const filteredIngredients = ingredients.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [stockFilter, setStockFilter] = useState('all');
+
+  const filteredIngredients = ingredients
+    .filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const isLow = (p.current_stock || 0) <= (p.min_stock_alert * (p.yield_quantity || 1));
+      const matchStockFilter = stockFilter !== 'low' || isLow;
+      return matchSearch && matchStockFilter;
+    })
+    .sort((a, b) => {
+      if (stockFilter === 'asc') {
+        return (a.current_stock || 0) - (b.current_stock || 0);
+      }
+      if (stockFilter === 'desc') {
+        return (b.current_stock || 0) - (a.current_stock || 0);
+      }
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col overflow-hidden">
@@ -135,18 +150,31 @@ export default function AdminIngredients() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-          <div className="relative w-full sm:w-72">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={18} />
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3 justify-between items-center bg-slate-50 shrink-0">
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto flex-1">
+            <div className="relative w-full sm:w-72">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <Search size={18} />
+              </div>
+              <input
+                type="text"
+                placeholder="Cari bahan baku..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Cari bahan baku..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            />
+
+            <select
+              value={stockFilter}
+              onChange={(e) => setStockFilter(e.target.value)}
+              className="w-full sm:w-56 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            >
+              <option value="all">Semua Stok (A-Z)</option>
+              <option value="asc">Stok Terendah → Tertinggi</option>
+              <option value="desc">Stok Tertinggi → Terendah</option>
+              <option value="low">⚠️ Stok Menipis</option>
+            </select>
           </div>
         </div>
 

@@ -12,6 +12,16 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+interface CompletedTransaction {
+  id: string;
+  total: number;
+  subtotal: number;
+  tax: number;
+  paymentMethod: string;
+  orderType: string;
+  items: { name: string; quantity: number; price: number }[];
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { cart, currentShift, orderType, notes, setNotes, clearCart } = usePosStore();
@@ -19,12 +29,17 @@ export default function CheckoutPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [lastTxId, setLastTxId] = useState<string | null>(null);
+  const [completedTx, setCompletedTx] = useState<CompletedTransaction | null>(null);
   const [taxRate, setTaxRate] = useState(11);
+  const [storeInfo, setStoreInfo] = useState({ name: 'DIMDIM SHINE POS', address: '' });
 
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data } = await supabase.from('store_settings').select('tax_rate').limit(1).single();
-      if (data) setTaxRate(data.tax_rate);
+      const { data } = await supabase.from('store_settings').select('store_name, address, tax_rate').limit(1).single();
+      if (data) {
+        if (data.tax_rate !== undefined) setTaxRate(data.tax_rate);
+        if (data.store_name) setStoreInfo({ name: data.store_name, address: data.address || '' });
+      }
     };
     fetchSettings();
   }, []);
@@ -61,7 +76,7 @@ export default function CheckoutPage() {
       payment_method: paymentMethod,
       payment_status: 'paid',
       due_date: null,
-      table_number: notes || null, // Meminjam kolom table_number untuk menyimpan Catatan
+      table_number: notes || null,
       items: cart
     };
 
@@ -69,7 +84,17 @@ export default function CheckoutPage() {
     setIsLoading(false);
 
     if (res.success) {
-      setLastTxId(res.transaction?.id);
+      const txId = res.transaction?.id || '';
+      setLastTxId(txId);
+      setCompletedTx({
+        id: txId,
+        total,
+        subtotal,
+        tax,
+        paymentMethod,
+        orderType,
+        items: cart.map(i => ({ name: i.name, quantity: i.quantity, price: i.price }))
+      });
       setIsSuccess(true);
       clearCart();
       setNotes('');
@@ -90,66 +115,118 @@ export default function CheckoutPage() {
     window.print();
   };
 
-  const handlePrintSuratJalan = () => {
-    // Di aplikasi nyata, ini bisa membuka window popup dengan layout surat jalan khusus
-    alert("Mencetak Surat Jalan (Tanpa Harga)...");
-    window.print();
-  };
-
-  if (isSuccess) {
+  if (isSuccess && completedTx) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-slate-100 print-bg-white p-4">
-        <div className="bg-white p-6 sm:p-10 rounded-3xl shadow-2xl max-w-md w-full text-center border border-slate-100 print-no-shadow print-p-0 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-emerald-400 to-teal-500 print-hidden"></div>
-          <div className="mx-auto w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-6 print-hidden shadow-inner ring-8 ring-emerald-50/50">
-            <CheckCircle2 size={48} className="animate-in zoom-in duration-500" />
+      <>
+        {/* Printable 58mm Thermal Receipt (Only visible on print) */}
+        <div className="hidden print:block thermal-receipt font-mono text-[10px] text-black">
+          <div className="text-center font-bold text-[12px] uppercase">{storeInfo.name}</div>
+          {storeInfo.address && <div className="text-center text-[9px] mb-1">{storeInfo.address}</div>}
+          <div className="text-center my-1">================================</div>
+          <div className="flex justify-between">
+            <span>Tgl: {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+            <span>Jam: {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          <h2 className="text-3xl font-extrabold text-slate-800 mb-2 tracking-tight">Pembayaran Berhasil</h2>
-          <p className="text-slate-400 mb-8 font-mono text-sm tracking-wider">TX ID: {lastTxId}</p>
+          <div className="truncate">Tx : {completedTx.id}</div>
+          <div>Kasir: {currentShift?.cashierName || 'Sales'}</div>
+          <div>Order: {completedTx.orderType === 'delivery' ? 'KIRIM' : 'AMBIL'} ({completedTx.paymentMethod.toUpperCase()})</div>
+          <div className="text-center my-1">--------------------------------</div>
+          
+          <div className="space-y-1">
+            {completedTx.items.map((item, idx) => (
+              <div key={idx} className="space-y-0.5">
+                <div className="font-bold">{item.name}</div>
+                <div className="flex justify-between pl-2">
+                  <span>{item.quantity} x {formatPrice(item.price)}</span>
+                  <span className="font-bold">{formatPrice(item.price * item.quantity)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="text-center my-1">--------------------------------</div>
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span>{formatPrice(completedTx.subtotal)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Pajak ({taxRate}%)</span>
+            <span>{formatPrice(completedTx.tax)}</span>
+          </div>
+          <div className="text-center my-1">--------------------------------</div>
+          <div className="flex justify-between font-bold text-[11px]">
+            <span>TOTAL</span>
+            <span>{formatPrice(completedTx.total)}</span>
+          </div>
+          <div className="text-center my-1">================================</div>
+          <div className="text-center text-[9px] mt-2 font-sans font-medium">
+            *** TERIMA KASIH ***<br/>
+            Selamat Menikmati
+          </div>
+        </div>
 
-          <div className="bg-slate-50/80 p-6 rounded-2xl mb-8 text-left border border-slate-100 print-border-black print-bg-white relative">
-            {/* Perforated edge effect */}
-            <div className="absolute -top-3 left-0 w-full flex justify-between px-2 print-hidden opacity-30">
-              {[...Array(12)].map((_, i) => <div key={i} className="w-3 h-3 rounded-full bg-white shadow-sm"></div>)}
+        {/* Screen View (Hidden when printing) */}
+        <div className="flex h-full w-full items-center justify-center bg-slate-100 print:hidden p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-xl max-w-md w-full text-center border border-slate-100 relative overflow-hidden my-auto max-h-[calc(100vh-1rem)] flex flex-col">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+            
+            <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-2 shrink-0 shadow-inner ring-4 ring-emerald-50/50">
+              <CheckCircle2 size={28} className="animate-in zoom-in duration-500 sm:w-8 sm:h-8" />
             </div>
             
-            <h3 className="font-bold text-lg mb-4 pb-3 border-b border-dashed border-slate-300 text-slate-700 flex justify-between items-end">
-              Struk Pesanan
-              <span className="text-xs font-normal text-slate-400 uppercase tracking-wider">{paymentMethod === 'cash' ? 'Tunai' : 'QRIS'}</span>
-            </h3>
-            
-            <div className="space-y-3 text-sm mb-4">
-              <div className="flex justify-between text-slate-500">
-                <span>Total Tagihan</span>
-                <span className="font-semibold text-slate-800">{formatPrice(total)}</span>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight shrink-0">Pembayaran Berhasil</h2>
+            <p className="text-slate-400 mb-3 font-mono text-[11px] sm:text-xs tracking-wider truncate shrink-0 px-2" title={completedTx.id}>
+              TX ID: {completedTx.id}
+            </p>
+
+            <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl mb-3 text-left border border-slate-100 relative flex-1 flex flex-col min-h-0 overflow-hidden">
+              <h3 className="font-bold text-sm sm:text-base mb-2 pb-2 border-b border-dashed border-slate-300 text-slate-700 flex justify-between items-center shrink-0">
+                <span>Struk Pesanan</span>
+                <span className="text-[11px] font-normal text-slate-400 uppercase tracking-wider">{completedTx.paymentMethod === 'cash' ? 'Tunai' : 'QRIS'} • {completedTx.orderType === 'delivery' ? 'Kirim' : 'Ambil'}</span>
+              </h3>
+              
+              <div className="border-b border-slate-200 pb-2 mb-2 space-y-1.5 overflow-y-auto flex-1 pr-1 custom-scrollbar min-h-[40px]">
+                {completedTx.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-xs sm:text-sm">
+                    <span className="font-medium text-slate-700 truncate pr-2">{item.quantity}x {item.name}</span>
+                    <span className="font-semibold text-slate-800 shrink-0">{formatPrice(item.price * item.quantity)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-1 text-xs sm:text-sm shrink-0 pt-1">
+                <div className="flex justify-between text-slate-500">
+                  <span>Subtotal</span>
+                  <span>{formatPrice(completedTx.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-slate-500">
+                  <span>Pajak ({taxRate}%)</span>
+                  <span>{formatPrice(completedTx.tax)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-sm sm:text-base text-slate-800 pt-1.5 border-t border-dashed border-slate-300">
+                  <span>Total Tagihan</span>
+                  <span className="text-emerald-600">{formatPrice(completedTx.total)}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-3 print-hidden">
-            <button
-              onClick={handlePrint}
-              className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3.5 rounded-xl transition-all shadow-md active:scale-[0.98]"
-            >
-              <Printer size={20} /> Cetak Struk
-            </button>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-2 shrink-0">
               <button
-                onClick={handlePrintSuratJalan}
-                className="w-full flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3.5 rounded-xl transition-all active:scale-[0.98]"
+                onClick={handlePrint}
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all shadow-md active:scale-[0.98]"
               >
-                <FileText size={18} /> Surat Jalan
+                <Printer size={16} /> Cetak Struk (58mm)
               </button>
               <button
                 onClick={() => router.push('/pos')}
-                className="w-full flex items-center justify-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-3.5 rounded-xl transition-all active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all active:scale-[0.98]"
               >
-                Selesai
+                Selesai & Kembali ke POS
               </button>
             </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 

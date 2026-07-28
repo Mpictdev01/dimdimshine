@@ -9,7 +9,9 @@ import Cart from '@/app/components/pos/Cart';
 import CustomerModal from '@/app/components/pos/CustomerModal';
 import ReportModal from '@/app/components/pos/ReportModal';
 import ExpenseModal from '@/app/components/pos/ExpenseModal';
-import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X, FileText, Wallet } from 'lucide-react';
+import IngredientsStockModal from '@/app/components/pos/IngredientsStockModal';
+import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X, FileText, Wallet, Boxes, Menu } from 'lucide-react';
+import clsx from 'clsx';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,6 +30,8 @@ export default function PosPage() {
   const [showMobileCart, setShowMobileCart] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showIngredientsModal, setShowIngredientsModal] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const [animateCart, setAnimateCart] = useState(false);
   const isFirstRender = useRef(true);
 
@@ -162,43 +166,66 @@ export default function PosPage() {
       <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
         
         {/* Top Controls: Search & Profil */}
-        <div className="p-4 bg-white border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6 shrink-0">
-          <div className="w-full sm:flex-1 relative max-w-xl">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={18} />
+        <div className="p-4 bg-white border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-3 md:gap-6 shrink-0">
+          <div className="w-full md:flex-1 relative max-w-xl flex items-center gap-2">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <Search size={18} />
+              </div>
+              <input
+                type="text"
+                placeholder="Cari produk (nama / kode)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2.5 sm:py-3 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm text-sm"
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Cari produk (nama / kode)..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm"
-            />
+            
+            {/* Tombol Hamburger Menu Mobile */}
+            <button
+              onClick={() => setShowMobileNav(true)}
+              className="md:hidden flex items-center justify-center p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl border border-slate-200 shrink-0 transition-colors"
+              title="Menu Navigasi POS"
+            >
+              <Menu size={22} />
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end flex-wrap sm:flex-nowrap">
-            <div className="flex items-center gap-2 text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 flex-1 sm:flex-none justify-center">
-              <UserCircle size={20} className="text-blue-500" />
-              <span className="font-semibold text-sm truncate max-w-[120px] sm:max-w-none">Sales: {currentShift.cashierName}</span>
+          {/* Controls Desktop (md ke atas) */}
+          <div className="hidden md:flex items-center gap-3 w-auto justify-end">
+            <div className="flex items-center gap-2 text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 shrink-0">
+              <UserCircle size={18} className="text-blue-500 shrink-0" />
+              <span className="font-semibold text-xs sm:text-sm whitespace-nowrap">Sales: {currentShift.cashierName}</span>
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button 
+                onClick={() => setShowIngredientsModal(true)}
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs sm:text-sm rounded-xl transition-all border border-emerald-200/60 shadow-xs whitespace-nowrap active:scale-95"
+              >
+                <Boxes size={16} className="shrink-0 text-emerald-600" />
+                <span>Stok Bahan</span>
+              </button>
               <button 
                 onClick={() => setShowExpenseModal(true)}
-                className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2.5 bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 font-medium text-sm rounded-xl transition-colors border border-amber-100"
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs sm:text-sm rounded-xl transition-all border border-amber-200/60 shadow-xs whitespace-nowrap active:scale-95"
               >
-                <Wallet size={16} /> <span>Pengeluaran</span>
+                <Wallet size={16} className="shrink-0 text-amber-600" />
+                <span>Pengeluaran</span>
               </button>
               <button 
                 onClick={() => setShowReportModal(true)}
-                className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 font-medium text-sm rounded-xl transition-colors border border-blue-100"
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs sm:text-sm rounded-xl transition-all border border-blue-200/60 shadow-xs whitespace-nowrap active:scale-95"
               >
-                <FileText size={16} /> <span>Laporan</span>
+                <FileText size={16} className="shrink-0 text-blue-600" />
+                <span>Laporan</span>
               </button>
               <button 
                 onClick={handleLogout}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 font-medium text-sm rounded-xl transition-colors border border-red-100"
+                className="flex items-center justify-center gap-2 px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs sm:text-sm rounded-xl transition-all border border-red-200/60 shadow-xs whitespace-nowrap active:scale-95"
               >
-                <LogOut size={16} /> <span className="hidden sm:inline">Keluar</span>
+                <LogOut size={16} className="shrink-0 text-red-600" />
+                <span className="hidden sm:inline">Keluar</span>
               </button>
             </div>
           </div>
@@ -304,6 +331,106 @@ export default function PosPage() {
       {showExpenseModal && (
         <ExpenseModal onClose={() => setShowExpenseModal(false)} />
       )}
+
+      {/* Modal Stok Bahan Baku */}
+      {showIngredientsModal && (
+        <IngredientsStockModal onClose={() => setShowIngredientsModal(false)} />
+      )}
+
+      {/* Slide-over Navbar Drawer Mobile (Smooth CSS Transitions) */}
+      <div 
+        className={clsx(
+          "fixed inset-0 z-[90] md:hidden transition-all duration-300 ease-in-out",
+          showMobileNav ? "opacity-100 visible pointer-events-auto" : "opacity-0 invisible pointer-events-none"
+        )}
+      >
+        {/* Backdrop */}
+        <div 
+          className={clsx(
+            "fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity duration-300 ease-in-out",
+            showMobileNav ? "opacity-100" : "opacity-0"
+          )}
+          onClick={() => setShowMobileNav(false)}
+        />
+
+        {/* Drawer Menu */}
+        <div 
+          className={clsx(
+            "fixed inset-y-0 right-0 w-72 max-w-[80vw] bg-white z-[95] p-5 flex flex-col shadow-2xl transition-transform duration-300 ease-out transform-gpu",
+            showMobileNav ? "translate-x-0" : "translate-x-full"
+          )}
+        >
+          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <UserCircle size={22} className="text-blue-600" />
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm">{currentShift.cashierName}</h3>
+                <p className="text-[11px] text-slate-400 font-medium">Petugas Sales POS</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowMobileNav(false)}
+              className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 space-y-2.5 py-2">
+            <button
+              onClick={() => {
+                setShowIngredientsModal(true);
+                setShowMobileNav(false);
+              }}
+              className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-800 font-semibold text-sm transition-all border border-emerald-100 active:scale-[0.98]"
+            >
+              <div className="p-2 bg-emerald-500 text-white rounded-lg shadow-sm">
+                <Boxes size={18} />
+              </div>
+              <span>Stok Bahan Baku</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowExpenseModal(true);
+                setShowMobileNav(false);
+              }}
+              className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-amber-50/70 hover:bg-amber-100/80 text-amber-800 font-semibold text-sm transition-all border border-amber-100 active:scale-[0.98]"
+            >
+              <div className="p-2 bg-amber-500 text-white rounded-lg shadow-sm">
+                <Wallet size={18} />
+              </div>
+              <span>Catat Pengeluaran</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowReportModal(true);
+                setShowMobileNav(false);
+              }}
+              className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-blue-50/70 hover:bg-blue-100/80 text-blue-800 font-semibold text-sm transition-all border border-blue-100 active:scale-[0.98]"
+            >
+              <div className="p-2 bg-blue-600 text-white rounded-lg shadow-sm">
+                <FileText size={18} />
+              </div>
+              <span>Laporan Harian Kasir</span>
+            </button>
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 mt-auto">
+            <button
+              onClick={() => {
+                setShowMobileNav(false);
+                handleLogout();
+              }}
+              className="w-full flex items-center justify-center gap-2 p-3.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm transition-all border border-red-100 active:scale-[0.98]"
+            >
+              <LogOut size={18} />
+              <span>Keluar Shift</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
     </div>
   );

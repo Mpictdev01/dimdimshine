@@ -1,7 +1,7 @@
 'use client';
 
 import { usePosStore } from '@/lib/store/usePosStore';
-import { Minus, Plus, Trash2, ShoppingBag, Truck, Store, FileEdit } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, FileEdit } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
@@ -96,27 +96,8 @@ export default function Cart() {
           </div>
         ))}
 
-        {/* Kontrol Order di Keranjang (Scrollable) */}
-        <div className="mt-6 pt-4 border-t border-dashed border-slate-200 space-y-3">
-          <div className="flex items-center p-1 bg-slate-100 rounded-xl w-full">
-            <button
-              onClick={() => setOrderType('delivery')}
-              className={`flex-1 py-2 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                orderType === 'delivery' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Truck size={16} /> Kirim
-            </button>
-            <button
-              onClick={() => setOrderType('pickup')}
-              className={`flex-1 py-2 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                orderType === 'pickup' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Store size={16} /> Ambil
-            </button>
-          </div>
-
+        {/* Kontrol Catatan Keranjang (Scrollable) */}
+        <div className="mt-4 pt-4 border-t border-dashed border-slate-200">
           <div className="relative">
             <div className="absolute top-3 left-3 text-slate-400">
               <FileEdit size={16} />

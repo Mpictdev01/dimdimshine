@@ -23,3 +23,37 @@ body {
 input, textarea, select {
   color: #0f172a !important;
 }
+
+/* 58mm Bluetooth Thermal Printer Styles */
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 0mm;
+  }
+  
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 58mm !important;
+    font-family: 'Courier New', Courier, monospace, sans-serif !important;
+  }
+
+  header, nav, footer, .print-hidden {
+    display: none !important;
+  }
+
+  .thermal-receipt {
+    display: block !important;
+    width: 58mm !important;
+    max-width: 58mm !important;
+    padding: 2mm 3mm !important;
+    margin: 0 auto !important;
+    color: #000000 !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+  }
+}

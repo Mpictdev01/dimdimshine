@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { X, Loader2, Send, TrendingUp, Banknote, QrCode, Package, CalendarDays, FileText } from 'lucide-react';
+import { X, Loader2, Send, TrendingUp, Banknote, QrCode, Package, CalendarDays, FileText, Wallet, TrendingDown } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,7 +19,8 @@ export default function ReportModal({ onClose }: ReportModalProps) {
   const [reportData, setReportData] = useState({
     totalOmzet: 0,
     totalCash: 0,
-    totalQris: 0
+    totalQris: 0,
+    totalExpenses: 0
   });
   
   const [ingredients, setIngredients] = useState<any[]>([]);
@@ -51,7 +52,20 @@ export default function ReportModal({ onClose }: ReportModalProps) {
           });
         }
         
-        setReportData({ totalOmzet: omzet, totalCash: cash, totalQris: qris });
+        setReportData({ totalOmzet: omzet, totalCash: cash, totalQris: qris, totalExpenses: 0 });
+        
+        // Fetch Expenses for today
+        const { data: expData, error: expError } = await supabase
+          .from('expenses')
+          .select('amount')
+          .gte('created_at', today.toISOString());
+          
+        let totalExp = 0;
+        if (expData && !expError) {
+          totalExp = expData.reduce((sum, e) => sum + (e.amount || 0), 0);
+        }
+        
+        setReportData({ totalOmzet: omzet, totalCash: cash, totalQris: qris, totalExpenses: totalExp });
         
         // Fetch Ingredients Stock
         const { data: ingData, error: ingError } = await supabase
@@ -101,6 +115,8 @@ export default function ReportModal({ onClose }: ReportModalProps) {
     message = message.replace(/\[OMZET\]/g, formatPrice(reportData.totalOmzet));
     message = message.replace(/\[TUNAI\]/g, formatPrice(reportData.totalCash));
     message = message.replace(/\[QRIS\]/g, formatPrice(reportData.totalQris));
+    message = message.replace(/\[PENGELUARAN\]/g, formatPrice(reportData.totalExpenses));
+    message = message.replace(/\[OMZET_BERSIH\]/g, formatPrice(reportData.totalOmzet - reportData.totalExpenses));
     message = message.replace(/\[TANGGAL\]/g, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
     
     let stokText = ingredients.map(ing => {
@@ -196,6 +212,47 @@ export default function ReportModal({ onClose }: ReportModalProps) {
                 <div className="text-3xl font-black text-slate-800">
                   {formatPrice(reportData.totalQris)}
                 </div>
+              </div>
+            </div>
+
+            {/* Pengeluaran & Omzet Bersih */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-100">
+                <div className="flex items-center gap-3 text-slate-600 mb-3">
+                  <div className="p-2 bg-red-100 text-red-700 rounded-lg">
+                    <Wallet size={20} />
+                  </div>
+                  <span className="font-semibold text-sm uppercase tracking-wide">Total Pengeluaran</span>
+                </div>
+                <div className="text-3xl font-black text-red-600">
+                  -{formatPrice(reportData.totalExpenses)}
+                </div>
+              </div>
+              
+              <div className={`p-6 rounded-2xl shadow-sm border ${
+                (reportData.totalOmzet - reportData.totalExpenses) >= 0 
+                  ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200' 
+                  : 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200'
+              }`}>
+                <div className="flex items-center gap-3 text-slate-600 mb-3">
+                  <div className={`p-2 rounded-lg ${
+                    (reportData.totalOmzet - reportData.totalExpenses) >= 0 
+                      ? 'bg-emerald-100 text-emerald-700' 
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    {(reportData.totalOmzet - reportData.totalExpenses) >= 0 
+                      ? <TrendingUp size={20} />
+                      : <TrendingDown size={20} />
+                    }
+                  </div>
+                  <span className="font-semibold text-sm uppercase tracking-wide">Omzet Bersih</span>
+                </div>
+                <div className={`text-3xl font-black ${
+                  (reportData.totalOmzet - reportData.totalExpenses) >= 0 ? 'text-emerald-700' : 'text-red-600'
+                }`}>
+                  {formatPrice(reportData.totalOmzet - reportData.totalExpenses)}
+                </div>
+                <p className="text-xs text-slate-500 mt-2 font-medium">Omzet - Pengeluaran</p>
               </div>
             </div>
 

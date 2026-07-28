@@ -8,7 +8,8 @@ import ProductCard from '@/app/components/pos/ProductCard';
 import Cart from '@/app/components/pos/Cart';
 import CustomerModal from '@/app/components/pos/CustomerModal';
 import ReportModal from '@/app/components/pos/ReportModal';
-import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X, FileText } from 'lucide-react';
+import ExpenseModal from '@/app/components/pos/ExpenseModal';
+import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X, FileText, Wallet } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,6 +27,7 @@ export default function PosPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showMobileCart, setShowMobileCart] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [animateCart, setAnimateCart] = useState(false);
   const isFirstRender = useRef(true);
 
@@ -181,6 +183,12 @@ export default function PosPage() {
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
               <button 
+                onClick={() => setShowExpenseModal(true)}
+                className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2.5 bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 font-medium text-sm rounded-xl transition-colors border border-amber-100"
+              >
+                <Wallet size={16} /> <span>Pengeluaran</span>
+              </button>
+              <button 
                 onClick={() => setShowReportModal(true)}
                 className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 font-medium text-sm rounded-xl transition-colors border border-blue-100"
               >
@@ -290,6 +298,11 @@ export default function PosPage() {
       {/* Modal Laporan */}
       {showReportModal && (
         <ReportModal onClose={() => setShowReportModal(false)} />
+      )}
+
+      {/* Modal Pengeluaran */}
+      {showExpenseModal && (
+        <ExpenseModal onClose={() => setShowExpenseModal(false)} />
       )}
 
     </div>

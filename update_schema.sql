@@ -31,3 +31,20 @@ ALTER TABLE public.stock_adjustments ALTER COLUMN product_id DROP NOT NULL;
 
 -- 7. Add cost_price to ingredients to track HPP correctly
 ALTER TABLE public.ingredients ADD COLUMN IF NOT EXISTS cost_price DECIMAL(12,2) NOT NULL DEFAULT 0;
+
+-- 8. Expenses table for POS operational expenses
+CREATE TABLE IF NOT EXISTS public.expenses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    shift_id UUID REFERENCES public.shifts(id) ON DELETE SET NULL,
+    cashier_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    description TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anon full access on expenses"
+ON public.expenses
+FOR ALL TO anon
+USING (true) WITH CHECK (true);

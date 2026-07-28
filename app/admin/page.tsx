@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { Banknote, TrendingUp, PackageSearch, AlertTriangle, Loader2, ArrowRight, Filter, ShoppingBag } from 'lucide-react';
+import { Banknote, TrendingUp, TrendingDown, PackageSearch, AlertTriangle, Loader2, ArrowRight, Filter, ShoppingBag, Wallet } from 'lucide-react';
 import Link from 'next/link';
 
 const supabase = createClient(
@@ -22,6 +22,7 @@ export default function AdminDashboard() {
     purchasesTotal: 0,
     cashTotal: 0,
     qrisTotal: 0,
+    expensesTotal: 0,
   });
 
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
@@ -244,13 +245,26 @@ export default function AdminDashboard() {
             .slice(0, 10);
         }
 
+        // 2.5 Pengeluaran (Expenses)
+        const { data: expenseData } = await supabase
+          .from('expenses')
+          .select('amount')
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString());
+        
+        let totalExpenses = 0;
+        if (expenseData) {
+          totalExpenses = expenseData.reduce((sum, e) => sum + (e.amount || 0), 0);
+        }
+
         setStats({ 
           salesTotal: totalSales, 
           netProfitTotal: totalNetProfit, 
           piutangTotal: totalPiutangAmount, 
           purchasesTotal: totalPurchases,
           cashTotal: totalCash,
-          qrisTotal: totalQris
+          qrisTotal: totalQris,
+          expensesTotal: totalExpenses
         });
         
         if (lowStock) setLowStockProducts(lowStock);
@@ -421,6 +435,50 @@ export default function AdminDashboard() {
               <Link href="/admin/inventory/purchases" className="relative z-10 mt-3 text-sm text-indigo-700 font-medium inline-flex items-center gap-1 hover:gap-2 transition-all w-max">
                 Catat Barang Masuk <ArrowRight size={14} />
               </Link>
+            </div>
+          </div>
+
+          {/* Pengeluaran & Omzet Bersih */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-100 flex flex-col relative overflow-hidden group">
+              <div className="absolute -right-6 -top-6 text-red-50 opacity-50 group-hover:scale-110 transition-transform">
+                <Wallet size={120} />
+              </div>
+              <div className="flex items-center gap-3 text-slate-600 mb-2 relative z-10">
+                <div className="p-2 bg-red-100 text-red-700 rounded-lg">
+                  <Wallet size={20} />
+                </div>
+                <span className="font-semibold text-sm uppercase tracking-wide">Pengeluaran (Periode Ini)</span>
+              </div>
+              <div title={formatPrice(stats.expensesTotal)} className="text-3xl lg:text-xl xl:text-2xl 2xl:text-3xl font-black text-red-600 relative z-10 break-words">
+                -{formatPrice(stats.expensesTotal)}
+              </div>
+            </div>
+            
+            <div className={`p-6 rounded-2xl shadow-sm border flex flex-col relative overflow-hidden group ${
+              (stats.salesTotal - stats.expensesTotal) >= 0 
+                ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200' 
+                : 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200'
+            }`}>
+              <div className="flex items-center gap-3 text-slate-600 mb-2 relative z-10">
+                <div className={`p-2 rounded-lg ${
+                  (stats.salesTotal - stats.expensesTotal) >= 0 
+                    ? 'bg-emerald-100 text-emerald-700' 
+                    : 'bg-red-100 text-red-700'
+                }`}>
+                  {(stats.salesTotal - stats.expensesTotal) >= 0 
+                    ? <TrendingUp size={20} />
+                    : <TrendingDown size={20} />
+                  }
+                </div>
+                <span className="font-semibold text-sm uppercase tracking-wide">Omzet Bersih (Periode Ini)</span>
+              </div>
+              <div title={formatPrice(stats.salesTotal - stats.expensesTotal)} className={`text-3xl lg:text-xl xl:text-2xl 2xl:text-3xl font-black relative z-10 break-words ${
+                (stats.salesTotal - stats.expensesTotal) >= 0 ? 'text-emerald-700' : 'text-red-600'
+              }`}>
+                {formatPrice(stats.salesTotal - stats.expensesTotal)}
+              </div>
+              <p className="text-xs text-slate-500 mt-2 font-medium relative z-10">Penjualan - Pengeluaran</p>
             </div>
           </div>
 

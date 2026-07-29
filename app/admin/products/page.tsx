@@ -44,24 +44,33 @@ export default function AdminProducts() {
       supabase.from('products').select('*, units(name), categories(name), product_ingredients(ingredient_id, quantity)').order('created_at', { ascending: false }),
       supabase.from('units').select('*').order('name'),
       supabase.from('categories').select('*').order('name'),
-      supabase.from('ingredients').select('id, name, unit, yield_unit, current_stock').order('name')
+      supabase.from('ingredients').select('id, name, unit, yield_unit, current_stock, cost_price').order('name')
     ]);
     
     if (prodRes.data && ingRes.data) {
-      const ingredientsMap = new Map(ingRes.data.map(i => [i.id, i.current_stock || 0]));
+      const ingredientsStockMap = new Map(ingRes.data.map(i => [i.id, i.current_stock || 0]));
+      const ingredientsCostMap = new Map(ingRes.data.map(i => [i.id, Number(i.cost_price || 0)]));
       
       const mappedProducts = prodRes.data.map(p => {
         let maxStock = p.stock || 0;
+        let hpp = Number(p.cost_price || 0);
         
         if (p.product_ingredients && p.product_ingredients.length > 0) {
           const possibleQuantities = p.product_ingredients.map((pi: any) => {
-            const availableIngStock = ingredientsMap.get(pi.ingredient_id) || 0;
+            const availableIngStock = ingredientsStockMap.get(pi.ingredient_id) || 0;
             return Math.floor(availableIngStock / pi.quantity);
           });
           maxStock = Math.min(...possibleQuantities);
+
+          let calculatedBomCost = 0;
+          p.product_ingredients.forEach((pi: any) => {
+            const unitCost = ingredientsCostMap.get(pi.ingredient_id) || 0;
+            calculatedBomCost += unitCost * pi.quantity;
+          });
+          hpp = calculatedBomCost;
         }
         
-        return { ...p, stock: maxStock }; // Override stock for UI
+        return { ...p, stock: maxStock, calculated_hpp: hpp };
       });
       setProducts(mappedProducts);
     } else if (prodRes.data) {
@@ -165,6 +174,19 @@ export default function AdminProducts() {
     }));
   };
 
+  const calculateFormHpp = () => {
+    if (!formData.ingredients || formData.ingredients.length === 0) return 0;
+    let totalHpp = 0;
+    formData.ingredients.forEach(ing => {
+      if (ing.ingredient_id && ing.quantity) {
+        const foundIng = allIngredients.find(i => i.id === ing.ingredient_id);
+        const cost = foundIng?.cost_price ? Number(foundIng.cost_price) : 0;
+        totalHpp += cost * Number(ing.quantity);
+      }
+    });
+    return totalHpp;
+  };
+
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingProduct(null);
@@ -174,11 +196,13 @@ export default function AdminProducts() {
     e.preventDefault();
     setIsSubmitting(true);
 
+    const formHpp = calculateFormHpp();
     const basePayload = {
       name: formData.name,
       category_id: formData.category_id || null,
       price: parseFloat(formData.price),
-      unit_id: formData.unit_id || null
+      unit_id: formData.unit_id || null,
+      cost_price: formHpp
     };
 
     if (editingProduct) {
@@ -210,8 +234,7 @@ export default function AdminProducts() {
     } else {
       const insertPayload = {
         ...basePayload,
-        stock: 0,
-        cost_price: 0
+        stock: 0
       };
       
       const { data, error } = await supabase
@@ -337,68 +360,85 @@ export default function AdminProducts() {
                   <th className="font-medium p-4">Nama Produk</th>
                   <th className="font-medium p-4">Kategori</th>
                   <th className="font-medium p-4">Stok</th>
-                  <th className="font-medium p-4">Harga</th>
+                  <th className="font-medium p-4">Harga Jual</th>
+                  <th className="font-medium p-4">HPP (Modal)</th>
+                  <th className="font-medium p-4">Estimasi Laba</th>
                   <th className="font-medium p-4 text-right pr-6">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredProducts.map((product) => (
-                  <tr key={product.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 pl-6">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                        checked={selectedIds.includes(product.id)}
-                        onChange={() => handleSelect(product.id)}
-                      />
-                    </td>
-                    <td className="p-4">
-                      <div className="font-semibold text-slate-800">
-                        {product.name}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                        {product.categories?.name || 'Uncategorized'}
-                      </span>
-                    </td>
-                    <td className="p-4 font-medium text-slate-700">
-                      {product.stock || 0} {product.units?.name || ''}
-                    </td>
-                    <td className="p-4 font-medium text-slate-700">
-                      {formatPrice(product.price)}
-                    </td>
-                    <td className="p-4 pr-6 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          onClick={() => handleDuplicateProduct(product)}
-                          className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                          title="Duplikat produk ini beserta resepnya"
-                        >
-                          <Copy size={18} />
-                        </button>
-                        <button 
-                          onClick={() => openModal(product)}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Edit produk"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(product.id)}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Hapus produk"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredProducts.map((product) => {
+                  const hppVal = Number(product.calculated_hpp || product.cost_price || 0);
+                  const profitVal = Number(product.price || 0) - hppVal;
+
+                  return (
+                    <tr key={product.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-4 pl-6">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                          checked={selectedIds.includes(product.id)}
+                          onChange={() => handleSelect(product.id)}
+                        />
+                      </td>
+                      <td className="p-4">
+                        <div className="font-semibold text-slate-800">
+                          {product.name}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                          {product.categories?.name || 'Uncategorized'}
+                        </span>
+                      </td>
+                      <td className="p-4 font-medium text-slate-700">
+                        {product.stock || 0} {product.units?.name || ''}
+                      </td>
+                      <td className="p-4 font-semibold text-slate-800">
+                        {formatPrice(product.price)}
+                      </td>
+                      <td className="p-4">
+                        <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md inline-block">
+                          {formatPrice(hppVal)}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <span className={clsx("inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border", profitVal >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200")}>
+                          {formatPrice(profitVal)}
+                        </span>
+                      </td>
+                      <td className="p-4 pr-6 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button 
+                            onClick={() => handleDuplicateProduct(product)}
+                            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Duplikat produk ini beserta resepnya"
+                          >
+                            <Copy size={18} />
+                          </button>
+                          <button 
+                            onClick={() => openModal(product)}
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Edit produk"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(product.id)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Hapus produk"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
                 
                 {filteredProducts.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500">
+                    <td colSpan={8} className="p-8 text-center text-slate-500">
                       Tidak ada produk yang ditemukan.
                     </td>
                   </tr>
@@ -506,6 +546,40 @@ export default function AdminProducts() {
                   ))}
                 </select>
               </div>
+
+              {/* Realtime HPP & Profit Summary Box */}
+              {(() => {
+                const liveHpp = calculateFormHpp();
+                const livePrice = parseFloat(formData.price) || 0;
+                const liveProfit = livePrice - liveHpp;
+                const hasZeroCostIngredients = formData.ingredients.some(ing => {
+                  if (!ing.ingredient_id) return false;
+                  const foundIng = allIngredients.find(i => i.id === ing.ingredient_id);
+                  return !foundIng?.cost_price || Number(foundIng.cost_price) <= 0;
+                });
+
+                return (
+                  <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-4 flex flex-col gap-2">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                      <div>
+                        <span className="text-xs font-semibold text-emerald-900 block">HPP (Modal Per Porsi):</span>
+                        <span className="text-lg font-bold text-slate-800">{formatPrice(liveHpp)}</span>
+                      </div>
+                      <div className="sm:text-right">
+                        <span className="text-xs font-semibold text-emerald-900 block">Estimasi Laba Per Porsi:</span>
+                        <span className={clsx("text-base font-bold px-3 py-1 rounded-lg inline-block mt-0.5 border shadow-sm", liveProfit >= 0 ? "bg-white text-emerald-700 border-emerald-300" : "bg-red-50 text-red-600 border-red-200")}>
+                          {formatPrice(liveProfit)}
+                        </span>
+                      </div>
+                    </div>
+                    {hasZeroCostIngredients && (
+                      <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200 mt-1">
+                        ⚠️ Ada bahan baku yang harga modalnya masih Rp 0. Atur harga modal bahan di menu <strong>Inventory → Bahan Baku</strong> agar HPP terhitung akurat.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="pt-4 border-t border-slate-100">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4">

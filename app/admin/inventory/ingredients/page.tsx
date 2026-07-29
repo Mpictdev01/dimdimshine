@@ -23,7 +23,8 @@ export default function AdminIngredients() {
     unit: '', 
     min_stock_alert: '10',
     yield_quantity: '1',
-    yield_unit: ''
+    yield_unit: '',
+    cost_price: '0'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -36,6 +37,10 @@ export default function AdminIngredients() {
     const { data } = await supabase.from('ingredients').select('*').order('name');
     if (data) setIngredients(data);
     setIsLoading(false);
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
   };
 
   const handleDelete = async (id: string) => {
@@ -57,11 +62,12 @@ export default function AdminIngredients() {
         unit: ingredient.unit || '',
         min_stock_alert: ingredient.min_stock_alert?.toString() || '0',
         yield_quantity: ingredient.yield_quantity?.toString() || '1',
-        yield_unit: ingredient.yield_unit || ingredient.unit || ''
+        yield_unit: ingredient.yield_unit || ingredient.unit || '',
+        cost_price: ingredient.cost_price?.toString() || '0'
       });
     } else {
       setEditingIngredient(null);
-      setFormData({ name: '', unit: '', min_stock_alert: '10', yield_quantity: '1', yield_unit: '' });
+      setFormData({ name: '', unit: '', min_stock_alert: '10', yield_quantity: '1', yield_unit: '', cost_price: '0' });
     }
     setIsModalOpen(true);
   };
@@ -80,7 +86,8 @@ export default function AdminIngredients() {
       unit: formData.unit,
       min_stock_alert: parseFloat(formData.min_stock_alert) || 0,
       yield_quantity: parseFloat(formData.yield_quantity) || 1,
-      yield_unit: formData.yield_unit || formData.unit
+      yield_unit: formData.yield_unit || formData.unit,
+      cost_price: parseFloat(formData.cost_price) || 0
     };
 
     if (editingIngredient) {
@@ -189,6 +196,7 @@ export default function AdminIngredients() {
                 <tr className="text-slate-500 text-sm border-b border-slate-200">
                   <th className="font-medium p-4 pl-6">Nama Bahan Baku</th>
                   <th className="font-medium p-4">Stok Saat Ini</th>
+                  <th className="font-medium p-4">Harga Modal / Porsi</th>
                   <th className="font-medium p-4">Satuan Beli</th>
                   <th className="font-medium p-4">Hasil Konversi (Porsi)</th>
                   <th className="font-medium p-4">Batas Peringatan Stok</th>
@@ -219,6 +227,11 @@ export default function AdminIngredients() {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="p-4 font-semibold text-slate-800">
+                      <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md inline-block">
+                        {formatPrice(ing.cost_price || 0)} / {ing.yield_unit || ing.unit}
+                      </span>
                     </td>
                     <td className="p-4 font-medium text-slate-700">
                       {ing.unit}
@@ -313,18 +326,33 @@ export default function AdminIngredients() {
                   <p className="text-xs text-slate-500 mt-1">Satuan saat barang datang.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Batas Peringatan Stok (Min)</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Harga Modal per {formData.yield_unit || formData.unit || 'Porsi'} (Rp)</label>
                   <input
                     type="number"
                     min="0"
+                    step="any"
                     required
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors"
-                    value={formData.min_stock_alert}
-                    onChange={(e) => setFormData({...formData, min_stock_alert: e.target.value})}
-                    placeholder="10"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors font-semibold text-slate-800"
+                    value={formData.cost_price}
+                    onChange={(e) => setFormData({...formData, cost_price: e.target.value})}
+                    placeholder="0"
                   />
-                  <p className="text-xs text-slate-500 mt-1">Sistem akan memberi alert jika stok kurang dari ini.</p>
+                  <p className="text-xs text-slate-500 mt-1">Modal per 1 {formData.yield_unit || formData.unit || 'porsi'} untuk kalkulasi HPP resep.</p>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Batas Peringatan Stok (Min)</label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors"
+                  value={formData.min_stock_alert}
+                  onChange={(e) => setFormData({...formData, min_stock_alert: e.target.value})}
+                  placeholder="10"
+                />
+                <p className="text-xs text-slate-500 mt-1">Sistem akan memberi alert jika stok kurang dari ini.</p>
               </div>
 
               <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">

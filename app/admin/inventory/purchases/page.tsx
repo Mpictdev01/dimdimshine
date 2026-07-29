@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Plus, Loader2, X, Save, Search, Trash2, ShoppingCart } from 'lucide-react';
+import { Plus, Loader2, X, Save, Search, Trash2, ShoppingCart, CheckSquare, Square, Check, ArrowRight, PackageCheck } from 'lucide-react';
 import { createPurchase } from '@/app/actions/purchase';
 import clsx from 'clsx';
 
@@ -10,6 +10,18 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+interface CartItem {
+  id: string;
+  name: string;
+  qty: number;
+  buy_price: number;
+  type: 'product' | 'ingredient';
+  current_stock: number;
+  unit: string;
+  yield_quantity: number;
+  yield_unit?: string;
+}
 
 export default function AdminPurchases() {
   const [purchases, setPurchases] = useState<any[]>([]);
@@ -23,17 +35,12 @@ export default function AdminPurchases() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [note, setNote] = useState('');
-  const [cartItems, setCartItems] = useState<{
-    id: string, 
-    name: string, 
-    qty: number, 
-    buy_price: number, 
-    type: 'product'|'ingredient'
-  }[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   
-  // Product/Ingredient Selection State
+  // Product/Ingredient Multi-Selection State
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState<'product'|'ingredient'>('product');
+  const [searchType, setSearchType] = useState<'product' | 'ingredient'>('ingredient');
+  const [selectedItemKeys, setSelectedItemKeys] = useState<string[]>([]);
   
   useEffect(() => {
     fetchData();
@@ -60,8 +67,9 @@ export default function AdminPurchases() {
     setSelectedSupplier('');
     setNote('');
     setCartItems([]);
+    setSelectedItemKeys([]);
     setSearchQuery('');
-    setSearchType('product');
+    setSearchType('ingredient');
     setIsModalOpen(true);
   };
 
@@ -69,31 +77,95 @@ export default function AdminPurchases() {
     setIsModalOpen(false);
   };
 
-  const addItemToCart = (item: any, type: 'product'|'ingredient') => {
-    const existing = cartItems.find(c => c.id === item.id && c.type === type);
-    if (existing) {
-      setCartItems(cartItems.map(c => 
-        (c.id === item.id && c.type === type) ? { ...c, qty: c.qty + 1 } : c
-      ));
-    } else {
-      setCartItems([...cartItems, {
-        id: item.id,
-        name: item.name,
-        qty: 1,
-        buy_price: 0,
-        type: type
-      }]);
-    }
-    setSearchQuery('');
+  const getItemKey = (id: string, type: 'product' | 'ingredient') => `${type}-${id}`;
+
+  const isCartItem = (id: string, type: 'product' | 'ingredient') => {
+    return cartItems.some(c => c.id === id && c.type === type);
   };
 
-  const updateCartItem = (id: string, type: 'product'|'ingredient', field: 'qty' | 'buy_price', value: number) => {
+  const toggleItemSelection = (id: string, type: 'product' | 'ingredient') => {
+    if (isCartItem(id, type)) return; // Already in cart
+    const key = getItemKey(id, type);
+    if (selectedItemKeys.includes(key)) {
+      setSelectedItemKeys(selectedItemKeys.filter(k => k !== key));
+    } else {
+      setSelectedItemKeys([...selectedItemKeys, key]);
+    }
+  };
+
+  const filteredItems = (searchType === 'product' ? products : ingredients).filter(item =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleSelectAll = () => {
+    const availableKeys = filteredItems
+      .filter(item => !isCartItem(item.id, searchType))
+      .map(item => getItemKey(item.id, searchType));
+
+    const allSelected = availableKeys.every(k => selectedItemKeys.includes(k));
+
+    if (allSelected) {
+      setSelectedItemKeys(selectedItemKeys.filter(k => !availableKeys.includes(k)));
+    } else {
+      const merged = Array.from(new Set([...selectedItemKeys, ...availableKeys]));
+      setSelectedItemKeys(merged);
+    }
+  };
+
+  const addSelectedItemsToCart = () => {
+    const newCart = [...cartItems];
+
+    if (searchType === 'ingredient') {
+      ingredients.forEach(ing => {
+        const key = getItemKey(ing.id, 'ingredient');
+        if (selectedItemKeys.includes(key) && !isCartItem(ing.id, 'ingredient')) {
+          const yieldQty = parseFloat(ing.yield_quantity || '1');
+          const defaultBuyPrice = ing.cost_price ? Number(ing.cost_price) * yieldQty : 0;
+          newCart.push({
+            id: ing.id,
+            name: ing.name,
+            qty: 1,
+            buy_price: defaultBuyPrice,
+            type: 'ingredient',
+            current_stock: Number(ing.current_stock || 0),
+            unit: ing.unit || 'unit',
+            yield_quantity: yieldQty,
+            yield_unit: ing.yield_unit || ing.unit
+          });
+        }
+      });
+    } else {
+      products.forEach(prod => {
+        const key = getItemKey(prod.id, 'product');
+        if (selectedItemKeys.includes(key) && !isCartItem(prod.id, 'product')) {
+          newCart.push({
+            id: prod.id,
+            name: prod.name,
+            qty: 1,
+            buy_price: Number(prod.cost_price || 0),
+            type: 'product',
+            current_stock: Number(prod.stock || 0),
+            unit: prod.units?.name || 'pcs',
+            yield_quantity: 1
+          });
+        }
+      });
+    }
+
+    setCartItems(newCart);
+    setSelectedItemKeys(selectedItemKeys.filter(k => !k.startsWith(`${searchType}-`)));
+    setTimeout(() => {
+      document.getElementById('cart-details-section')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  const updateCartItem = (id: string, type: 'product' | 'ingredient', field: 'qty' | 'buy_price', value: number) => {
     setCartItems(cartItems.map(c => 
       (c.id === id && c.type === type) ? { ...c, [field]: value } : c
     ));
   };
 
-  const removeCartItem = (id: string, type: 'product'|'ingredient') => {
+  const removeCartItem = (id: string, type: 'product' | 'ingredient') => {
     setCartItems(cartItems.filter(c => !(c.id === id && c.type === type)));
   };
 
@@ -109,7 +181,6 @@ export default function AdminPurchases() {
       alert('Tambahkan setidaknya 1 produk/bahan baku!');
       return;
     }
-    // Cek harga beli 0
     if (cartItems.some(i => i.buy_price <= 0)) {
       if(!confirm('Ada barang dengan Harga Beli Rp 0. Lanjutkan?')) return;
     }
@@ -134,7 +205,7 @@ export default function AdminPurchases() {
     if (res.success) {
       alert('Berhasil mencatat pembelian barang masuk. Stok telah ditambahkan otomatis!');
       closeModal();
-      fetchData(); // Refresh history
+      fetchData();
     } else {
       alert('Gagal mencatat pembelian: ' + res.error);
     }
@@ -145,9 +216,7 @@ export default function AdminPurchases() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
   };
 
-  const filteredItems = searchType === 'product' 
-    ? products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : ingredients.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const selectedCountForCurrentTab = filteredItems.filter(i => selectedItemKeys.includes(getItemKey(i.id, searchType))).length;
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col">
@@ -218,11 +287,11 @@ export default function AdminPurchases() {
       {/* Modal Form Pembelian */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[92vh] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
               <div>
-                <h2 className="text-xl font-bold text-slate-800">Pencatatan Barang Masuk</h2>
-                <p className="text-sm text-slate-500">Stok produk/bahan baku akan bertambah secara otomatis</p>
+                <h2 className="text-xl font-bold text-slate-800">Pencatatan Barang Masuk (Multi-Select)</h2>
+                <p className="text-sm text-slate-500">Pilih banyak bahan baku/produk sekaligus & pantau sisa stok otomatis</p>
               </div>
               <button onClick={closeModal} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors">
                 <X size={20} />
@@ -237,7 +306,7 @@ export default function AdminPurchases() {
                     required
                     value={selectedSupplier}
                     onChange={e => setSelectedSupplier(e.target.value)}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors" 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors text-slate-800" 
                   >
                     <option value="">-- Pilih Supplier --</option>
                     {suppliers.map(s => (
@@ -246,131 +315,257 @@ export default function AdminPurchases() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">No. Faktur / Catatan Tambahan (Opsional)</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">No. Faktur / Catatan (Opsional)</label>
                   <input 
                     type="text" 
                     value={note}
                     onChange={e => setNote(e.target.value)}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors" 
-                    placeholder="Misal: INV-20230101-A" 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors text-slate-800" 
+                    placeholder="Misal: INV-2026-0701 / Faktur Kios" 
                   />
                 </div>
               </div>
 
-              {/* Pencarian Produk */}
+              {/* Multi-Select Item Selection Box */}
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <div className="flex gap-4 mb-4 border-b border-slate-100 pb-2">
-                  <button
-                    type="button"
-                    onClick={() => setSearchType('product')}
-                    className={clsx("font-semibold pb-2 border-b-2 transition-colors", searchType === 'product' ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
-                  >
-                    Beli Produk Jadi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSearchType('ingredient')}
-                    className={clsx("font-semibold pb-2 border-b-2 transition-colors", searchType === 'ingredient' ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
-                  >
-                    Beli Bahan Baku
-                  </button>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-slate-100 pb-3">
+                  <div className="flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => { setSearchType('ingredient'); setSelectedItemKeys([]); }}
+                      className={clsx("font-semibold pb-2 border-b-2 transition-colors flex items-center gap-2", searchType === 'ingredient' ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
+                    >
+                      Beli Bahan Baku
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setSearchType('product'); setSelectedItemKeys([]); }}
+                      className={clsx("font-semibold pb-2 border-b-2 transition-colors flex items-center gap-2", searchType === 'product' ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
+                    >
+                      Beli Produk Jadi
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleSelectAll}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-colors flex items-center gap-1.5"
+                    >
+                      <CheckSquare size={14} />
+                      Pilih Semua ({filteredItems.filter(i => !isCartItem(i.id, searchType)).length})
+                    </button>
+                  </div>
                 </div>
 
-                <div className="relative mb-4">
+                <div className="relative mb-3">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                     <Search size={18} />
                   </div>
                   <input
                     type="text"
-                    placeholder={`Cari nama ${searchType === 'product' ? 'produk' : 'bahan baku'} untuk dibeli...`}
+                    placeholder={`Cari nama ${searchType === 'ingredient' ? 'bahan baku' : 'produk'} untuk dicentang sekaligus...`}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
+                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 text-slate-800 transition-colors"
                   />
                 </div>
 
-                {searchQuery && (
-                  <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100 mb-4">
-                    {filteredItems.map(item => (
+                {/* Grid Checklist Item */}
+                <div className="max-h-56 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100 bg-slate-50/50 p-1">
+                  {filteredItems.map(item => {
+                    const alreadyInCart = isCartItem(item.id, searchType);
+                    const isChecked = selectedItemKeys.includes(getItemKey(item.id, searchType)) || alreadyInCart;
+                    const stockVal = searchType === 'ingredient' ? (item.current_stock || 0) : (item.stock || 0);
+                    const unitName = searchType === 'ingredient' ? (item.unit || 'unit') : (item.units?.name || 'pcs');
+
+                    return (
                       <div 
                         key={item.id} 
-                        onClick={() => addItemToCart(item, searchType)}
-                        className="p-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center group transition-colors"
+                        onClick={() => toggleItemSelection(item.id, searchType)}
+                        className={clsx(
+                          "p-3 rounded-lg flex items-center justify-between transition-colors cursor-pointer select-none",
+                          alreadyInCart ? "bg-emerald-50/70 opacity-75 cursor-default" : isChecked ? "bg-blue-50 border border-blue-200" : "hover:bg-white"
+                        )}
                       >
-                        <span className="font-medium text-slate-800">{item.name}</span>
-                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded group-hover:bg-blue-100 group-hover:text-blue-700">
-                          + Tambah
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <div className="text-blue-600">
+                            {alreadyInCart ? (
+                              <CheckSquare size={20} className="text-emerald-600" />
+                            ) : isChecked ? (
+                              <CheckSquare size={20} className="text-blue-600" />
+                            ) : (
+                              <Square size={20} className="text-slate-300" />
+                            )}
+                          </div>
+                          <div>
+                            <span className={clsx("font-semibold text-sm", alreadyInCart ? "text-emerald-900" : "text-slate-800")}>
+                              {item.name}
+                            </span>
+                            {alreadyInCart && (
+                              <span className="ml-2 text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                Sudah di keranjang
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Stok Saat Ini Indicator */}
+                        <div className="text-right">
+                          <span className="text-xs text-slate-500 block">Stok Saat Ini:</span>
+                          <span className={clsx("text-xs font-bold px-2 py-0.5 rounded-md inline-block mt-0.5", stockVal <= 5 ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-700")}>
+                            {stockVal} {unitName}
+                          </span>
+                        </div>
                       </div>
-                    ))}
-                    {filteredItems.length === 0 && (
-                      <div className="p-3 text-sm text-slate-500 text-center">Data tidak ditemukan</div>
-                    )}
+                    );
+                  })}
+
+                  {filteredItems.length === 0 && (
+                    <div className="p-4 text-sm text-slate-500 text-center">Data tidak ditemukan</div>
+                  )}
+                </div>
+
+                {/* Tombol Tambahkan Item Terpilih Batch */}
+                <div className="mt-3 flex justify-between items-center bg-blue-50/70 p-3 rounded-xl border border-blue-100">
+                  <div className="text-sm font-medium text-blue-900 flex items-center gap-2">
+                    <PackageCheck size={18} className="text-blue-600" />
+                    <span>{selectedCountForCurrentTab} item dicentang</span>
                   </div>
-                )}
+                  <button
+                    type="button"
+                    disabled={selectedCountForCurrentTab === 0}
+                    onClick={addSelectedItemsToCart}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 font-bold text-sm text-white rounded-lg transition-colors shadow-sm flex items-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Tambahkan ({selectedCountForCurrentTab}) Item ke Rincian
+                  </button>
+                </div>
               </div>
 
-              {/* Rincian Cart Pembelian */}
-              {cartItems.length > 0 && (
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-4">
+              {/* Rincian Cart Pembelian & Kalkulasi Hasil Akhir Stok */}
+              {cartItems.length > 0 ? (
+                <div id="cart-details-section" className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-4 animate-in fade-in-50 duration-200">
+                  <div className="p-3 bg-blue-50/80 border-b border-blue-100 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                    <div>
+                      <h4 className="font-bold text-sm text-blue-900 flex items-center gap-2">
+                        <ShoppingCart size={16} className="text-blue-600" />
+                        Rincian Barang Masuk ({cartItems.length} Item)
+                      </h4>
+                      <p className="text-xs text-blue-700 mt-0.5">
+                        💡 <strong>Ubah Qty & Harga Beli</strong> pada kolom di bawah ini. Stok database <u>belum bertambah</u> sebelum tombol Simpan diklik.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCartItems([])}
+                      className="text-xs text-red-600 hover:underline font-semibold self-start sm:self-auto shrink-0"
+                    >
+                      Kosongkan Semua
+                    </button>
+                  </div>
                   <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr className="text-slate-600 text-sm">
-                        <th className="font-semibold p-3 pl-4">Item (Tipe)</th>
-                        <th className="font-semibold p-3 w-32">Kuantitas</th>
-                        <th className="font-semibold p-3 w-40">Harga Satuan (Rp)</th>
-                        <th className="font-semibold p-3 w-40 text-right">Subtotal</th>
-                        <th className="font-semibold p-3 w-16"></th>
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr className="text-slate-600 text-xs uppercase font-bold">
+                        <th className="p-3 pl-4">Item (Tipe)</th>
+                        <th className="p-3 w-28 text-center">Stok Awal</th>
+                        <th className="p-3 w-32">Tambah Qty</th>
+                        <th className="p-3 w-36 text-center">Hasil Akhir Stok</th>
+                        <th className="p-3 w-36">Harga Beli (Rp)</th>
+                        <th className="p-3 w-36 text-right">Subtotal</th>
+                        <th className="p-3 w-12"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {cartItems.map(item => (
-                        <tr key={`${item.type}-${item.id}`} className="hover:bg-slate-50/50">
-                          <td className="p-3 pl-4">
-                            <div className="font-medium text-slate-800">{item.name}</div>
-                            <div className="text-xs text-slate-500">{item.type === 'product' ? 'Produk Jadi' : 'Bahan Baku'}</div>
-                          </td>
-                          <td className="p-3">
-                            <input 
-                              type="number" 
-                              min="0" step="0.01"
-                              value={item.qty}
-                              onChange={e => updateCartItem(item.id, item.type, 'qty', Number(e.target.value))}
-                              className="w-full px-2 py-1 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <input 
-                              type="number" 
-                              min="0"
-                              value={item.buy_price}
-                              onChange={e => updateCartItem(item.id, item.type, 'buy_price', Number(e.target.value))}
-                              className="w-full px-2 py-1 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                          </td>
-                          <td className="p-3 text-right font-medium text-slate-700">
-                            {formatPrice(item.qty * item.buy_price)}
-                          </td>
-                          <td className="p-3 text-right">
-                            <button 
-                              onClick={() => removeCartItem(item.id, item.type)}
-                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                    <tbody className="divide-y divide-slate-100">
+                      {cartItems.map(item => {
+                        const yieldQty = item.yield_quantity || 1;
+                        const addedConverted = item.qty * yieldQty;
+                        const finalStock = (item.current_stock || 0) + addedConverted;
+                        const displayUnit = (item.type === 'ingredient' && item.yield_unit) ? item.yield_unit : item.unit;
+
+                        return (
+                          <tr key={`${item.type}-${item.id}`} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="p-3 pl-4">
+                              <div className="font-bold text-slate-800 text-sm">{item.name}</div>
+                              <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                <span className={clsx("px-1.5 py-0.5 rounded text-[10px] font-semibold", item.type === 'ingredient' ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800")}>
+                                  {item.type === 'ingredient' ? 'Bahan Baku' : 'Produk Jadi'}
+                                </span>
+                                {item.type === 'ingredient' && yieldQty > 1 && (
+                                  <span className="text-[11px] text-slate-400">(1 beli = {yieldQty} {displayUnit})</span>
+                                )}
+                              </div>
+                            </td>
+                            
+                            {/* Stok Awal */}
+                            <td className="p-3 text-center">
+                              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md inline-block">
+                                {item.current_stock} {displayUnit}
+                              </span>
+                            </td>
+
+                            {/* Tambah Qty */}
+                            <td className="p-3">
+                              <input 
+                                type="number" 
+                                min="0.01" step="any"
+                                value={item.qty}
+                                onChange={e => updateCartItem(item.id, item.type, 'qty', Math.max(0, Number(e.target.value)))}
+                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              />
+                            </td>
+
+                            {/* Hasil Akhir Stok */}
+                            <td className="p-3 text-center">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <ArrowRight size={12} className="text-emerald-500 shrink-0" />
+                                {finalStock} {displayUnit}
+                              </span>
+                            </td>
+
+                            {/* Harga Beli */}
+                            <td className="p-3">
+                              <input 
+                                type="number" 
+                                min="0"
+                                value={item.buy_price}
+                                onChange={e => updateCartItem(item.id, item.type, 'buy_price', Math.max(0, Number(e.target.value)))}
+                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              />
+                            </td>
+
+                            {/* Subtotal */}
+                            <td className="p-3 text-right font-bold text-slate-800 text-sm">
+                              {formatPrice(item.qty * item.buy_price)}
+                            </td>
+
+                            <td className="p-3 text-right">
+                              <button 
+                                onClick={() => removeCartItem(item.id, item.type)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Hapus item"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
+                </div>
+              ) : (
+                <div className="p-6 bg-slate-100/60 rounded-xl border border-dashed border-slate-300 text-center text-slate-500 text-sm">
+                  Belum ada item di rincian. Centang item di atas lalu klik <strong>"Tambahkan Item ke Rincian"</strong>.
                 </div>
               )}
             </div>
 
             <div className="border-t border-slate-200 bg-white p-4 md:p-6 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-slate-500 mb-1">Total Tagihan Pembelian</p>
-                <p className="text-2xl font-bold text-slate-800">{formatPrice(totalAmount)}</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Total Tagihan Pembelian</p>
+                <p className="text-2xl font-bold text-emerald-600">{formatPrice(totalAmount)}</p>
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={closeModal} className="px-6 py-3 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-colors">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { Plus, Edit2, Trash2, Search, Loader2, X, Save } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Loader2, X, Save, Copy } from 'lucide-react';
 import clsx from 'clsx';
 
 const supabase = createClient(
@@ -44,7 +44,7 @@ export default function AdminProducts() {
       supabase.from('products').select('*, units(name), categories(name), product_ingredients(ingredient_id, quantity)').order('created_at', { ascending: false }),
       supabase.from('units').select('*').order('name'),
       supabase.from('categories').select('*').order('name'),
-      supabase.from('ingredients').select('id, name, unit, current_stock').order('name')
+      supabase.from('ingredients').select('id, name, unit, yield_unit, current_stock').order('name')
     ]);
     
     if (prodRes.data && ingRes.data) {
@@ -129,6 +129,40 @@ export default function AdminProducts() {
       setFormData({ name: '', category_id: '', price: '', unit_id: '', ingredients: [] });
     }
     setIsModalOpen(true);
+  };
+
+  const handleDuplicateProduct = (product: any) => {
+    setEditingProduct(null);
+    setFormData({
+      name: `${product.name} (Salinan)`,
+      category_id: product.category_id || '',
+      price: product.price ? product.price.toString() : '0',
+      unit_id: product.unit_id || '',
+      ingredients: (product.product_ingredients || []).map((pi: any) => ({
+        ingredient_id: pi.ingredient_id,
+        quantity: pi.quantity
+      }))
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleCopyRecipeFromProduct = (sourceProductId: string) => {
+    if (!sourceProductId) return;
+    const sourceProd = products.find(p => p.id === sourceProductId);
+    if (!sourceProd || !sourceProd.product_ingredients || sourceProd.product_ingredients.length === 0) {
+      alert('Produk ini belum memiliki resep (BOM)');
+      return;
+    }
+
+    const copiedIngredients = sourceProd.product_ingredients.map((pi: any) => ({
+      ingredient_id: pi.ingredient_id,
+      quantity: pi.quantity
+    }));
+
+    setFormData(prev => ({
+      ...prev,
+      ingredients: copiedIngredients
+    }));
   };
 
   const closeModal = () => {
@@ -337,14 +371,23 @@ export default function AdminProducts() {
                     <td className="p-4 pr-6 text-right">
                       <div className="flex justify-end gap-2">
                         <button 
+                          onClick={() => handleDuplicateProduct(product)}
+                          className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                          title="Duplikat produk ini beserta resepnya"
+                        >
+                          <Copy size={18} />
+                        </button>
+                        <button 
                           onClick={() => openModal(product)}
                           className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit produk"
                         >
                           <Edit2 size={18} />
                         </button>
                         <button 
                           onClick={() => handleDelete(product.id)}
                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Hapus produk"
                         >
                           <Trash2 size={18} />
                         </button>
@@ -465,19 +508,41 @@ export default function AdminProducts() {
               </div>
 
               <div className="pt-4 border-t border-slate-100">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4">
                   <div>
                     <h3 className="text-sm font-semibold text-slate-700">Resep / Bahan Baku (Opsional)</h3>
                     <p className="text-xs text-slate-500 mt-1">Jika produk ini memiliki resep (BOM), tentukan bahan baku yang dibutuhkan per 1 porsi.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={addIngredientRow}
-                    className="text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
-                  >
-                    <Plus size={16} />
-                    Tambah Bahan
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {products.some(p => p.product_ingredients && p.product_ingredients.length > 0) && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          handleCopyRecipeFromProduct(e.target.value);
+                          e.target.value = '';
+                        }}
+                        className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none transition-colors cursor-pointer"
+                        title="Salin resep dari produk yang sudah ada"
+                      >
+                        <option value="">📋 Salin Resep Dari...</option>
+                        {products
+                          .filter(p => p.product_ingredients && p.product_ingredients.length > 0 && p.id !== editingProduct?.id)
+                          .map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} ({p.product_ingredients.length} bahan)
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      onClick={addIngredientRow}
+                      className="text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                    >
+                      <Plus size={14} />
+                      Tambah Bahan
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -494,7 +559,7 @@ export default function AdminProducts() {
                           >
                             <option value="">Pilih Bahan Baku</option>
                             {allIngredients.map(a => (
-                              <option key={a.id} value={a.id}>{a.name} ({a.unit})</option>
+                              <option key={a.id} value={a.id}>{a.name} ({a.yield_unit || a.unit})</option>
                             ))}
                           </select>
                         </div>
@@ -509,7 +574,7 @@ export default function AdminProducts() {
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Qty"
                           />
-                          <span className="text-xs text-slate-500 whitespace-nowrap">{selectedIng?.unit || '-'}</span>
+                          <span className="text-xs text-slate-500 whitespace-nowrap font-medium">{selectedIng?.yield_unit || selectedIng?.unit || '-'}</span>
                         </div>
                         <button
                           type="button"

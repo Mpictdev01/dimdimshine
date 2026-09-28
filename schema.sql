@@ -1,3 +1,5 @@
+-- LEGACY SCHEMA ONLY. Do not apply to staging or production: it grants anon full access.
+-- Use supabase/migrations and supabase/cutover/lock_down_anon.sql instead.
 -- SQL Schema for DIMDIM SHINE POS
 -- Generated based on Developer Guide
 

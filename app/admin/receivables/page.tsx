@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { Loader2, Search, CheckCircle, Clock } from 'lucide-react';
 
 const isPast = (date: Date) => {
@@ -36,10 +36,7 @@ const formatDateOnly = (date: Date) => {
   }).format(date);
 };
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function AdminReceivables() {
   const [transactions, setTransactions] = useState<any[]>([]);

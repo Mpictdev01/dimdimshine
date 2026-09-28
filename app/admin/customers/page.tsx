@@ -1,13 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { Plus, Trash2, Loader2, X, Save, Edit2, Search } from 'lucide-react';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function AdminCustomers() {
   const [customers, setCustomers] = useState<any[]>([]);

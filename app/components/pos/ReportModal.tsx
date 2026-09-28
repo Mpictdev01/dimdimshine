@@ -1,20 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { X, Loader2, Send, TrendingUp, Banknote, QrCode, Package, CalendarDays, FileText, Wallet, TrendingDown } from 'lucide-react';
+import { usePosStore } from '@/lib/store/usePosStore';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 interface ReportModalProps {
   onClose: () => void;
 }
 
 export default function ReportModal({ onClose }: ReportModalProps) {
+  const currentShift = usePosStore(state => state.currentShift);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reload, setReload] = useState(0);
   
   const [reportData, setReportData] = useState({
     totalOmzet: 0,
@@ -29,22 +30,21 @@ export default function ReportModal({ onClose }: ReportModalProps) {
 
   useEffect(() => {
     const fetchReportData = async () => {
-      setIsLoading(true);
+      setIsLoading(true); setLoadError('');
       try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        // Fetch transactions for today
+        if (!currentShift) throw new Error('Shift aktif tidak ditemukan');
+        // Data laporan kasir selalu dibatasi ke shift aktif.
         const { data: txData, error: txError } = await supabase
           .from('transactions')
           .select('total, payment_method')
-          .gte('created_at', today.toISOString());
+          .eq('shift_id', currentShift.id).eq('payment_status', 'paid');
           
         let omzet = 0;
         let cash = 0;
         let qris = 0;
         
-        if (txData && !txError) {
+        if (txError) throw txError;
+        if (txData) {
           txData.forEach(tx => {
             omzet += (tx.total || 0);
             if (tx.payment_method === 'cash') cash += (tx.total || 0);
@@ -58,10 +58,11 @@ export default function ReportModal({ onClose }: ReportModalProps) {
         const { data: expData, error: expError } = await supabase
           .from('expenses')
           .select('amount')
-          .gte('created_at', today.toISOString());
+          .eq('shift_id', currentShift.id);
           
         let totalExp = 0;
-        if (expData && !expError) {
+        if (expError) throw expError;
+        if (expData) {
           totalExp = expData.reduce((sum, e) => sum + (e.amount || 0), 0);
         }
         
@@ -73,7 +74,8 @@ export default function ReportModal({ onClose }: ReportModalProps) {
           .select('id, name, current_stock, unit, yield_quantity, yield_unit')
           .order('name');
           
-        if (ingData && !ingError) {
+        if (ingError) throw ingError;
+        if (ingData) {
           setIngredients(ingData);
         }
         
@@ -88,18 +90,18 @@ export default function ReportModal({ onClose }: ReportModalProps) {
           setWaTemplate(settingsData.wa_report_template);
         } else {
           // Default template if empty
-          setWaTemplate(`Laporan Harian POS\n[TANGGAL]\n\nTotal Omzet: [OMZET]\nTunai: [TUNAI]\nQRIS: [QRIS]\n\nSisa Stok Bahan:\n[STOK]\n\nTerima kasih.`);
+          setWaTemplate(`Laporan Shift POS\n[TANGGAL]\n\nTotal Omzet: [OMZET]\nTunai: [TUNAI]\nQRIS: [QRIS]\n\nSisa Stok Bahan:\n[STOK]\n\nTerima kasih.`);
         }
         
-      } catch (err) {
-        console.error("Gagal mengambil data laporan:", err);
+      } catch {
+        setLoadError('Laporan shift gagal dimuat.');
       } finally {
         setIsLoading(false);
       }
     };
     
     fetchReportData();
-  }, []);
+  }, [currentShift, reload]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -152,7 +154,7 @@ export default function ReportModal({ onClose }: ReportModalProps) {
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <TrendingUp className="text-blue-600" />
-            Laporan Harian Kasir
+            Laporan Shift Kasir
           </h2>
           <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5 ml-[28px]">
             <CalendarDays size={14} className="text-slate-400" />
@@ -173,6 +175,10 @@ export default function ReportModal({ onClose }: ReportModalProps) {
             <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
             <p>Menyiapkan data laporan...</p>
           </div>
+        ) : loadError ? (
+          <div role="alert" className="h-full flex flex-col items-center justify-center gap-3 text-red-700">
+            <p>{loadError}</p><button onClick={() => setReload(value => value + 1)} className="rounded-lg bg-blue-600 px-4 py-2 text-white">Coba lagi</button>
+          </div>
         ) : (
           <div className="max-w-3xl mx-auto space-y-6 md:space-y-8 pb-24">
             
@@ -183,7 +189,7 @@ export default function ReportModal({ onClose }: ReportModalProps) {
                   <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
                     <TrendingUp size={20} />
                   </div>
-                  <span className="font-semibold text-sm uppercase tracking-wide">Total Omzet Hari Ini</span>
+                  <span className="font-semibold text-sm uppercase tracking-wide">Total Omzet Shift</span>
                 </div>
                 <div className="text-3xl font-black text-slate-800">
                   {formatPrice(reportData.totalOmzet)}
@@ -319,7 +325,7 @@ export default function ReportModal({ onClose }: ReportModalProps) {
               <textarea
                 value={deskripsi}
                 onChange={(e) => setDeskripsi(e.target.value)}
-                placeholder="Tulis deskripsi orderan hari ini... (wajib diisi)"
+                placeholder="Tulis deskripsi shift ini... (wajib diisi)"
                 className={`w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none h-24 transition-colors ${
                   !deskripsi.trim() ? 'border-red-300 bg-red-50/50' : 'border-slate-200 bg-white'
                 }`}

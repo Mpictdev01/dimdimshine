@@ -1,15 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { usePosStore } from '@/lib/store/usePosStore';
 import { createExpense, deleteExpense } from '@/app/actions/expense';
 import { X, Loader2, Plus, Trash2, Wallet, Receipt, AlertCircle } from 'lucide-react';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 interface ExpenseModalProps {
   onClose: () => void;
@@ -30,22 +27,23 @@ export default function ExpenseModal({ onClose }: ExpenseModalProps) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   const fetchExpenses = async () => {
+    setIsLoading(true); setLoadError('');
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      if (!currentShift) throw new Error('Shift aktif tidak ditemukan');
 
       const { data, error: fetchError } = await supabase
         .from('expenses')
         .select('id, amount, description, created_at')
-        .gte('created_at', today.toISOString())
+        .eq('shift_id', currentShift.id)
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
       if (data) setExpenses(data);
-    } catch (err) {
-      console.error('Gagal mengambil data pengeluaran:', err);
+    } catch {
+      setLoadError('Pengeluaran shift gagal dimuat.');
     } finally {
       setIsLoading(false);
     }
@@ -148,7 +146,7 @@ export default function ExpenseModal({ onClose }: ExpenseModalProps) {
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Wallet className="text-amber-600" />
-            Pengeluaran Hari Ini
+            Pengeluaran Shift
           </h2>
           <p className="text-sm text-slate-500 mt-1 ml-[28px]">
             {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -169,6 +167,10 @@ export default function ExpenseModal({ onClose }: ExpenseModalProps) {
             <Loader2 className="animate-spin text-amber-600 mb-4" size={48} />
             <p>Memuat data pengeluaran...</p>
           </div>
+        ) : loadError ? (
+          <div role="alert" className="h-full flex flex-col items-center justify-center gap-3 text-red-700">
+            <p>{loadError}</p><button onClick={fetchExpenses} className="rounded-lg bg-amber-600 px-4 py-2 text-white">Coba lagi</button>
+          </div>
         ) : (
           <div className="max-w-3xl mx-auto space-y-6 md:space-y-8 pb-8">
 
@@ -178,7 +180,7 @@ export default function ExpenseModal({ onClose }: ExpenseModalProps) {
                 <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                   <Wallet size={20} />
                 </div>
-                <span className="font-semibold text-sm uppercase tracking-wide text-amber-100">Total Pengeluaran Hari Ini</span>
+                <span className="font-semibold text-sm uppercase tracking-wide text-amber-100">Total Pengeluaran Shift</span>
               </div>
               <div className="text-3xl font-black">
                 {formatPrice(totalExpenses)}
@@ -257,13 +259,13 @@ export default function ExpenseModal({ onClose }: ExpenseModalProps) {
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-slate-50">
                 <Receipt className="text-amber-600" size={20} />
-                <h3 className="font-bold text-slate-800">Riwayat Hari Ini</h3>
+                <h3 className="font-bold text-slate-800">Riwayat Shift</h3>
               </div>
               <div className="divide-y divide-slate-100">
                 {expenses.length === 0 ? (
                   <div className="p-8 text-center text-slate-400">
                     <Wallet size={36} className="mx-auto mb-2 opacity-40" />
-                    <p className="font-medium">Belum ada pengeluaran hari ini.</p>
+                    <p className="font-medium">Belum ada pengeluaran pada shift ini.</p>
                   </div>
                 ) : (
                   expenses.map((exp) => (

@@ -1,130 +1,73 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { KeyRound, Coins, ArrowRight, Loader2, LogOut } from 'lucide-react';
-import { loginWithPin, openShift } from '@/app/actions/shift';
+import { activeShift, openShift } from '@/app/actions/shift';
+import { currentSession, listStaffAccounts, loginAccount, logoutAccount } from '@/app/actions/auth';
 import { usePosStore } from '@/lib/store/usePosStore';
 
 export default function ShiftPage() {
   const router = useRouter();
-  const { setShift, currentShift, endShift } = usePosStore();
-  
+  const { setShift, endShift } = usePosStore();
+  const [accounts, setAccounts] = useState<{id:string; full_name:string}[]>([]);
+  const [userId, setUserId] = useState('');
   const [pin, setPin] = useState('');
+  const [name, setName] = useState('');
+  const [startingCash, setStartingCash] = useState('0');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handlePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pin) return;
-    
-    setIsLoading(true);
-    setError('');
-    
-    const res = await loginWithPin(pin);
-    
-    if (res.success && res.user) {
-      // Langsung siapkan sistem untuk sales ini tanpa tanya modal awal
-      const shiftRes = await openShift(res.user.id, 0);
-      
-      setIsLoading(false);
-      
-      if (shiftRes.success && shiftRes.shift) {
-        setShift({
-          id: shiftRes.shift.id,
-          cashierId: res.user.id,
-          cashierName: res.user.full_name,
-          startTime: shiftRes.shift.start_time,
-          startingCash: 0
-        });
-        router.push('/pos');
-      } else {
-        setError(shiftRes.error || 'Gagal menyiapkan akses Sales');
-      }
-    } else {
-      setIsLoading(false);
-      setError(res.error || 'PIN Salah atau Login gagal');
-    }
-  };
-
-  const handleLogout = () => {
-    endShift();
-  };
-
-  if (currentShift) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-slate-50">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
-          <div className="mx-auto w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
-            <Coins size={32} />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Akses Sales Aktif</h2>
-          <p className="text-slate-500 mb-8">Sales: <span className="font-semibold">{currentShift.cashierName}</span></p>
-          
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => router.push('/pos')}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition-colors"
-            >
-              Kembali ke POS
-            </button>
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3 rounded-xl transition-colors"
-            >
-              <LogOut size={18} />
-              Keluar (Logout)
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    listStaffAccounts().then(setAccounts).catch(() => setError('Daftar akun gagal dimuat. Coba muat ulang.'));
+    currentSession().then(async active => {
+      if (!active) { endShift(); return; }
+      if (active.mustChangePin) { router.replace('/change-pin'); return; }
+      setName(active.fullName);
+      const shift = await activeShift();
+      if (shift) { setShift(shift); router.replace('/pos'); }
+      else endShift();
+    }).catch(() => setError('Sesi tidak dapat diperiksa. Coba muat ulang.'));
+  }, [router, setShift, endShift]);
+  async function login(event: React.FormEvent) {
+    event.preventDefault(); setBusy(true); setError('');
+    const result = await loginAccount(userId, pin);
+    setBusy(false);
+    if (!result.success) { setError(result.error); return; }
+    if (result.user.mustChangePin) { router.replace('/change-pin'); return; }
+    setName(result.user.full_name);
+    const shift = await activeShift();
+    if (shift) { setShift(shift); router.replace('/pos'); }
   }
-
-  return (
-    <div className="flex h-full w-full items-center justify-center bg-slate-50 p-4">
-      <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-100">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-slate-800">Login Sales</h2>
-          <p className="text-slate-500 mt-2">
-            Masukkan PIN Anda untuk mencatat transaksi
-          </p>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm mb-6 border border-red-100">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handlePinSubmit} className="space-y-6">
-          <div>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-                <KeyRound size={20} />
-              </div>
-              <input
-                type="password"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="Masukkan PIN (misal: 1234)"
-                className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all"
-                autoFocus
-                required
-              />
-            </div>
-          </div>
-          
-          <button
-            type="submit"
-            disabled={isLoading || !pin}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white font-medium py-3.5 rounded-xl transition-all shadow-sm"
-          >
-            {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Login Sekarang'}
-            {!isLoading && <ArrowRight size={20} />}
-          </button>
-        </form>
-      </div>
+  async function start(event: React.FormEvent) {
+    event.preventDefault(); setBusy(true); setError('');
+    const result = await openShift(Number(startingCash));
+    setBusy(false);
+    if (!result.success) { setError(result.error); return; }
+    setShift({ id: result.shift.id, cashierId: result.user.userId, cashierName: result.user.fullName,
+      startTime: result.shift.start_time, startingCash: Number(result.shift.starting_cash) });
+    router.replace('/pos');
+  }
+  return <main className="flex h-full items-center justify-center bg-slate-50 p-4">
+    <div className="w-full max-w-sm rounded-2xl bg-white p-7 shadow-xl space-y-5">
+      <h1 className="text-2xl font-bold">{name ? 'Buka Shift' : 'Login POS'}</h1>
+      {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {name ? <form onSubmit={start} className="space-y-4">
+        <p className="text-sm text-slate-600">Kasir: {name}</p>
+        <label htmlFor="starting-cash" className="block text-sm font-medium">Kas tunai awal (Rp)</label>
+        <input id="starting-cash" type="number" min="0" step="1" value={startingCash}
+          onChange={event => setStartingCash(event.target.value)} required className="w-full rounded-lg border p-3" />
+        <button disabled={busy} className="w-full rounded-lg bg-blue-600 p-3 text-white disabled:opacity-50">{busy ? 'Membuka…' : 'Buka shift'}</button>
+        <button type="button" onClick={async () => { await logoutAccount(); setName(''); endShift(); }} className="w-full text-sm text-slate-500">Ganti akun</button>
+      </form> : <form onSubmit={login} className="space-y-4">
+        <label htmlFor="staff-account" className="block text-sm font-medium">Akun staf</label>
+        <select id="staff-account" value={userId} onChange={event => setUserId(event.target.value)} required className="w-full rounded-lg border p-3">
+          <option value="">Pilih akun</option>
+          {accounts.map(account => <option key={account.id} value={account.id}>{account.full_name}</option>)}
+        </select>
+        <label htmlFor="staff-pin" className="block text-sm font-medium">PIN</label>
+        <input id="staff-pin" type="password" inputMode="numeric" autoComplete="current-password" value={pin}
+          onChange={event => setPin(event.target.value)} required className="w-full rounded-lg border p-3" />
+        <button disabled={busy || !userId} className="w-full rounded-lg bg-blue-600 p-3 text-white disabled:opacity-50">{busy ? 'Memeriksa…' : 'Masuk'}</button>
+      </form>}
     </div>
-  );
+  </main>;
 }

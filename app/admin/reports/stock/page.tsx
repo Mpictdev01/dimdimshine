@@ -1,362 +1,178 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { Loader2, Search, ArrowDownRight, ArrowUpRight, Filter } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { browserDataClient as db } from '@/lib/browser-data-client';
+import { localDateEnd, localDateStart } from '@/lib/local-date';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+type StockItem = { id: string; name: string; stock: number; unit: string; yield: number; kind: 'product' | 'ingredient' };
+type Movement = { id: string; date: string; itemId: string; direction: 'IN' | 'OUT';
+  quantity: number; source: string; reference: string };
+type Relation<T> = T | T[] | null;
+type Product = { id: string; name: string; stock: number; units: Relation<{ name: string }>;
+  product_ingredients: { ingredient_id: string }[] };
+type Ingredient = { id: string; name: string; current_stock: number; yield_quantity: number;
+  yield_unit: string; unit: string };
+type PurchaseItem = { id: string; product_id: string | null; ingredient_id: string | null;
+  qty: number; purchases: Relation<{ id: string; created_at: string; suppliers: Relation<{ name: string }> }> };
+type Usage = { id: string; product_id: string | null; ingredient_id: string | null; quantity: number;
+  transaction_items: Relation<{ id: string; transaction_id: string; transactions: Relation<{ id: string; created_at: string; payment_status: string }> }> };
+type TransactionItem = { id: string; product_id: string; quantity: number;
+  transactions: Relation<{ id: string; created_at: string; payment_status: string }> };
+type Adjustment = { id: string; product_id: string | null; ingredient_id: string | null;
+  difference: number; reason: string; created_at: string };
 
-interface StockMovement {
-  id: string;
-  date: string;
-  type: 'IN' | 'OUT';
-  document_id: string;
-  product_id: string;
-  product_name: string;
-  qty: number;
-  unit_name: string;
-  price: number;
-  reference_name: string; // Supplier name or Customer name
-  balance?: number; // Running balance
-}
+function one<T>(value: Relation<T>): T | null { return Array.isArray(value) ? value[0] ?? null : value; }
 
 export default function AdminStockReport() {
-  const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterProduct, setFilterProduct] = useState('all');
-  const [filterType, setFilterType] = useState('all');
+  const [items, setItems] = useState<StockItem[]>([]);
+  const [movements, setMovements] = useState<Movement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [itemId, setItemId] = useState('all');
+  const [direction, setDirection] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  useEffect(() => {
-    fetchData();
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    const queries = await Promise.all([
+      db.from('products').select('id,name,stock,units(name),product_ingredients(ingredient_id)'),
+      db.from('ingredients').select('id,name,current_stock,yield_quantity,yield_unit,unit'),
+      db.from('purchase_items').select('id,product_id,ingredient_id,qty,purchases(id,created_at,suppliers(name))'),
+      db.from('sale_stock_usage').select('id,product_id,ingredient_id,quantity,transaction_items(id,transaction_id,transactions(id,created_at,payment_status))'),
+      db.from('stock_adjustments').select('id,product_id,ingredient_id,difference,reason,created_at'),
+      db.from('transaction_items').select('id,product_id,quantity,transactions(id,created_at,payment_status)'),
+    ]);
+    const failure = queries.find(query => query.error)?.error;
+    if (failure) { setError(failure.message); setLoading(false); return; }
+
+    const [products, ingredients, purchases, usages, adjustments, saleItems] = queries.map(query => query.data ?? []) as
+      [Product[], Ingredient[], PurchaseItem[], Usage[], Adjustment[], TransactionItem[]];
+    const stockItems: StockItem[] = [
+      ...products.filter(product => !product.product_ingredients?.length).map(product => ({
+        id: product.id, name: product.name, stock: Number(product.stock),
+        unit: one(product.units)?.name ?? 'unit', yield: 1, kind: 'product' as const,
+      })),
+      ...ingredients.map(ingredient => ({
+        id: ingredient.id, name: ingredient.name, stock: Number(ingredient.current_stock),
+        unit: ingredient.yield_unit || ingredient.unit, yield: Number(ingredient.yield_quantity) || 1,
+        kind: 'ingredient' as const,
+      })),
+    ].sort((a, b) => a.name.localeCompare(b.name));
+    const itemMap = new Map(stockItems.map(item => [item.id, item]));
+    const rows: Movement[] = [];
+    for (const purchase of purchases) {
+      const target = itemMap.get(purchase.ingredient_id ?? purchase.product_id ?? '');
+      const parent = one(purchase.purchases);
+      if (!target || !parent) continue;
+      rows.push({ id: `purchase-${purchase.id}`, date: parent.created_at, itemId: target.id,
+        direction: 'IN', quantity: Number(purchase.qty) * target.yield,
+        source: 'Pembelian', reference: one(parent.suppliers)?.name ?? parent.id });
+    }
+    const trackedSaleItems = new Set<string>();
+    for (const usage of usages) {
+      const target = itemMap.get(usage.ingredient_id ?? usage.product_id ?? '');
+      const line = one(usage.transaction_items);
+      const transaction = one(line?.transactions ?? null);
+      if (line) trackedSaleItems.add(line.id);
+      if (!target || !transaction || transaction.payment_status !== 'paid') continue;
+      rows.push({ id: `sale-${usage.id}`, date: transaction.created_at, itemId: target.id,
+        direction: 'OUT', quantity: Number(usage.quantity), source: 'Penjualan', reference: transaction.id });
+    }
+    // Historical BOM usage was never recorded. Show only direct-stock sales.
+    for (const line of saleItems) {
+      const target = itemMap.get(line.product_id);
+      const transaction = one(line.transactions);
+      if (!target || target.kind !== 'product' || trackedSaleItems.has(line.id) ||
+        !transaction || transaction.payment_status !== 'paid') continue;
+      rows.push({ id: `legacy-sale-${line.id}`, date: transaction.created_at, itemId: target.id,
+        direction: 'OUT', quantity: Number(line.quantity), source: 'Penjualan lama', reference: transaction.id });
+    }
+    for (const adjustment of adjustments) {
+      const target = itemMap.get(adjustment.ingredient_id ?? adjustment.product_id ?? '');
+      if (!target || !Number(adjustment.difference)) continue;
+      rows.push({ id: `adjustment-${adjustment.id}`, date: adjustment.created_at, itemId: target.id,
+        direction: adjustment.difference > 0 ? 'IN' : 'OUT',
+        quantity: Math.abs(Number(adjustment.difference)) * target.yield,
+        source: 'Penyesuaian', reference: adjustment.reason });
+    }
+    setItems(stockItems);
+    setMovements(rows.sort((a, b) => Date.parse(b.date) - Date.parse(a.date)));
+    setLoading(false);
   }, []);
 
-  const fetchData = async () => {
-    setIsLoading(true);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
-    // 1. Ambil Data Produk untuk Filter dan Stok Saat Ini
-    const { data: prodData } = await supabase.from('products').select('id, name, stock, units(name)').order('name');
-    const currentStocks: Record<string, number> = {};
-    if (prodData) {
-      setProducts(prodData);
-      prodData.forEach(p => {
-        currentStocks[p.id] = p.stock || 0;
-      });
-    }
+  const visible = useMemo(() => movements.filter(movement => {
+    const item = items.find(entry => entry.id === movement.itemId);
+    return item && (itemId === 'all' || itemId === item.id) &&
+      (direction === 'all' || direction === movement.direction) &&
+      (!startDate || new Date(movement.date) >= localDateStart(startDate)) &&
+      (!endDate || new Date(movement.date) <= localDateEnd(endDate)) &&
+      (!search || `${item.name} ${movement.reference} ${movement.source}`.toLowerCase().includes(search.toLowerCase()));
+  }), [movements, items, itemId, direction, startDate, endDate, search]);
+  const selectedItem = items.find(item => item.id === itemId);
 
-    // 2. Ambil Riwayat Pembelian (Barang Masuk)
-    const { data: purchaseData, error: err1 } = await supabase
-      .from('purchase_items')
-      .select(`
-        id, qty, buy_price,
-        products(id, name, units(name)),
-        purchases(id, created_at, suppliers(name))
-      `);
-
-    // 3. Ambil Riwayat Penjualan (Barang Keluar)
-    const { data: salesData, error: err2 } = await supabase
-      .from('transaction_items')
-      .select(`
-        id, quantity, price,
-        products(id, name, units(name)),
-        transactions(id, created_at, customers(name))
-      `);
-
-    let combined: StockMovement[] = [];
-
-    if (purchaseData) {
-      purchaseData.forEach((item: any) => {
-        if (!item.purchases || !item.products) return;
-        combined.push({
-          id: `in-${item.id}`,
-          date: item.purchases.created_at,
-          type: 'IN',
-          document_id: item.purchases.id,
-          product_id: item.products.id,
-          product_name: item.products.name,
-          qty: item.qty,
-          unit_name: item.products.units?.name || '',
-          price: item.buy_price,
-          reference_name: item.purchases.suppliers?.name || 'Supplier Umum'
-        });
-      });
-    }
-
-    if (salesData) {
-      salesData.forEach((item: any) => {
-        if (!item.transactions || !item.products) return;
-        combined.push({
-          id: `out-${item.id}`,
-          date: item.transactions.created_at,
-          type: 'OUT',
-          document_id: item.transactions.id,
-          product_id: item.products.id,
-          product_name: item.products.name,
-          qty: item.quantity,
-          unit_name: item.products.units?.name || '',
-          price: item.price,
-          reference_name: item.transactions.customers?.name || 'Pelanggan Umum'
-        });
-      });
-    }
-
-    // 4. Ambil Riwayat Penyesuaian (Stock Opname)
-    const { data: adjData } = await supabase
-      .from('stock_adjustments')
-      .select(`
-        id, difference, reason, created_at,
-        products(id, name, units(name))
-      `);
-
-    if (adjData) {
-      adjData.forEach((item: any) => {
-        if (!item.products || !item.difference) return;
-        
-        combined.push({
-          id: `adj-${item.id}`,
-          date: item.created_at,
-          type: item.difference > 0 ? 'IN' : 'OUT',
-          document_id: `ADJ-${item.id.substring(0, 5)}`,
-          product_id: item.products.id,
-          product_name: item.products.name,
-          qty: Math.abs(item.difference),
-          unit_name: item.products.units?.name || '',
-          price: 0,
-          reference_name: `Opname: ${item.reason}`
-        });
-      });
-    }
-
-    // Urutkan dari yang terbaru (Descending)
-    combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    // Hitung Sisa Stok mundur dari stok saat ini
-    combined.forEach(m => {
-      m.balance = currentStocks[m.product_id] || 0;
-      if (m.type === 'IN') {
-        currentStocks[m.product_id] -= m.qty;
-      } else {
-        currentStocks[m.product_id] += m.qty;
-      }
-    });
-
-    setMovements(combined);
-    setIsLoading(false);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Intl.DateTimeFormat('id-ID', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    }).format(new Date(dateString));
-  };
-
-  const filteredMovements = movements.filter(m => {
-    const matchSearch = m.product_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                        m.document_id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchProduct = filterProduct === 'all' || m.product_name === filterProduct;
-    const matchType = filterType === 'all' || m.type === filterType;
-    
-    let matchDate = true;
-    if (startDate) {
-      matchDate = matchDate && new Date(m.date) >= new Date(startDate);
-    }
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      matchDate = matchDate && new Date(m.date) <= end;
-    }
-    
-    return matchSearch && matchProduct && matchType && matchDate;
-  });
-
-  return (
-    <div className="p-4 md:p-8 h-full relative flex flex-col">
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Riwayat Pergerakan Stok</h1>
-          <p className="text-slate-500 text-sm">Buku besar riwayat pergerakan keluar dan masuk barang (Inventory Ledger).</p>
-        </div>
-      </div>
-
-      {/* Filter Section */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6 shrink-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Pencarian</label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={16} />
-            </div>
-            <input
-              type="text"
-              placeholder="ID / Nama Produk..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tanggal Mulai</label>
-          <input 
-            type="date" 
-            value={startDate}
-            onChange={e => setStartDate(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tanggal Akhir</label>
-          <input 
-            type="date" 
-            value={endDate}
-            onChange={e => setEndDate(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tipe Pergerakan</label>
-          <select 
-            value={filterType}
-            onChange={e => setFilterType(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors appearance-none bg-white"
-          >
-            <option value="all">Semua Tipe</option>
-            <option value="IN">Stok Masuk (Pembelian/Opname+)</option>
-            <option value="OUT">Stok Keluar (Penjualan/Opname-)</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Produk / Barang</label>
-          <select 
-            value={filterProduct}
-            onChange={e => setFilterProduct(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors appearance-none bg-white"
-          >
-            <option value="all">Semua Produk</option>
-            {products.map(p => (
-              <option key={p.id} value={p.name}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
-        {/* Tabel */}
-        <div className="flex-1 overflow-auto">
-          {isLoading ? (
-            <div className="h-full flex items-center justify-center">
-              <Loader2 className="animate-spin text-blue-600" size={32} />
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-              <thead className="sticky top-0 bg-white shadow-sm z-10">
-                <tr className="text-slate-500 text-sm border-b border-slate-200">
-                  <th className="font-medium p-4 pl-6">Waktu & Referensi</th>
-                  <th className="font-medium p-4">Keterangan</th>
-                  <th className="font-medium p-4">Nama Produk</th>
-                  <th className="font-medium p-4 text-center">Pergerakan Stok</th>
-                  <th className="font-medium p-4 text-center">Sisa Stok</th>
-                  <th className="font-medium p-4 text-right pr-6">Pihak Terkait</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredMovements.map((m) => (
-                  <tr key={m.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 pl-6">
-                      <div className="font-semibold text-slate-800">
-                        {formatDate(m.date)}
-                      </div>
-                      <div className="text-xs text-slate-500 font-mono mt-1" title={m.document_id}>
-                        {m.type === 'IN' ? 'PO' : 'INV'}-{m.document_id.split('-')[0].toUpperCase()}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      {m.type === 'IN' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          <ArrowDownRight size={14} /> BARANG MASUK
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-100 text-red-800 border border-red-200">
-                          <ArrowUpRight size={14} /> BARANG KELUAR
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 font-semibold text-slate-700">
-                      {m.product_name}
-                    </td>
-                    <td className="p-4 text-center">
-                      <div className={m.type === 'IN' ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
-                        {m.type === 'IN' ? '+' : '-'}{m.qty} <span className="text-xs font-normal text-slate-500">{m.unit_name}</span>
-                      </div>
-                    </td>
-                    <td className="p-4 text-center bg-slate-50/30">
-                      <div className="font-bold text-slate-800">
-                        {m.balance} <span className="text-xs font-normal text-slate-500">{m.unit_name}</span>
-                      </div>
-                    </td>
-                    <td className="p-4 pr-6 text-right">
-                      <div className="font-medium text-slate-800">{m.reference_name}</div>
-                      <div className="text-xs text-slate-500">
-                        {m.reference_name.startsWith('Opname:') ? 'Internal Gudang' : m.type === 'IN' ? 'Supplier' : 'Toko Pelanggan'}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filteredMovements.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-12 text-center text-slate-500">
-                      Tidak ada pergerakan stok yang ditemukan.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-        {filterProduct !== 'all' && filteredMovements.length > 0 && (
-          <div className="p-4 bg-slate-800 border-t border-slate-700 flex flex-col md:flex-row justify-between items-center shrink-0 text-white rounded-b-2xl shadow-inner">
-            <div className="flex items-center">
-              <div>
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Ringkasan Pergerakan</div>
-                <div className="text-lg font-bold text-white truncate max-w-[200px]">{filterProduct}</div>
-              </div>
-            </div>
-            <div className="flex gap-6 items-center mt-4 md:mt-0">
-              <div className="text-right">
-                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Masuk</div>
-                 <div className="text-lg font-bold text-emerald-400">+{filteredMovements.filter(m => m.type === 'IN').reduce((sum, m) => sum + m.qty, 0)}</div>
-              </div>
-              <div className="text-right">
-                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Keluar</div>
-                 <div className="text-lg font-bold text-red-400">-{filteredMovements.filter(m => m.type === 'OUT').reduce((sum, m) => sum + m.qty, 0)}</div>
-              </div>
-              <div className="w-px h-8 bg-slate-700 mx-1"></div>
-              <div className="text-right">
-                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Sisa Stok Aktual (Sistem)</div>
-                 <div className="text-xl font-black text-blue-400">
-                   {products.find(p => p.name === filterProduct)?.stock || 0}
-                   <span className="text-sm font-medium text-blue-300 ml-1">
-                     {products.find(p => p.name === filterProduct)?.units?.name || 'Unit'}
-                   </span>
-                 </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <main className="p-4 md:p-8 space-y-5">
+    <header>
+      <h1 className="text-2xl font-bold text-slate-800">Riwayat Pergerakan Stok</h1>
+      <p className="text-sm text-slate-500">Pergerakan produk tanpa resep dan bahan baku dalam satuan fisik.</p>
+    </header>
+    <section className="grid gap-3 rounded-2xl border bg-white p-4 sm:grid-cols-2 lg:grid-cols-5" aria-label="Filter riwayat stok">
+      <label className="text-sm">Cari nama, referensi, atau sumber
+        <input className="mt-1 w-full rounded-lg border p-2" value={search} onChange={event => setSearch(event.target.value)} />
+      </label>
+      <label className="text-sm">Barang
+        <select className="mt-1 w-full rounded-lg border p-2" value={itemId} onChange={event => setItemId(event.target.value)}>
+          <option value="all">Semua barang</option>
+          {items.map(item => <option key={item.id} value={item.id}>{item.name} ({item.kind === 'ingredient' ? 'Bahan' : 'Produk'})</option>)}
+        </select>
+      </label>
+      <label className="text-sm">Arah
+        <select className="mt-1 w-full rounded-lg border p-2" value={direction} onChange={event => setDirection(event.target.value)}>
+          <option value="all">Semua</option><option value="IN">Masuk</option><option value="OUT">Keluar</option>
+        </select>
+      </label>
+      <label className="text-sm">Dari tanggal
+        <input type="date" className="mt-1 w-full rounded-lg border p-2" value={startDate} onChange={event => setStartDate(event.target.value)} />
+      </label>
+      <label className="text-sm">Sampai tanggal
+        <input type="date" className="mt-1 w-full rounded-lg border p-2" value={endDate} onChange={event => setEndDate(event.target.value)} />
+      </label>
+    </section>
+    {selectedItem && <p className="rounded-xl bg-blue-50 p-3 text-sm text-blue-900">
+      Stok fisik saat ini: <strong>{selectedItem.stock} {selectedItem.unit}</strong>
+    </p>}
+    {loading ? <p role="status">Memuat riwayat stok...</p> : error ?
+      <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4">
+        <p>Gagal memuat: {error}</p><button className="mt-2 rounded bg-red-700 px-3 py-2 text-white" onClick={() => void load()}>Coba lagi</button>
+      </div> : <div className="overflow-x-auto rounded-2xl border bg-white">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50"><tr>
+            <th className="p-3">Waktu</th><th className="p-3">Barang</th><th className="p-3">Sumber</th>
+            <th className="p-3">Referensi</th><th className="p-3 text-right">Pergerakan</th>
+          </tr></thead>
+          <tbody>{visible.map(movement => {
+            const item = items.find(entry => entry.id === movement.itemId)!;
+            return <tr key={movement.id} className="border-t">
+              <td className="p-3">{new Date(movement.date).toLocaleString('id-ID')}</td>
+              <td className="p-3">{item.name}</td><td className="p-3">{movement.source}</td>
+              <td className="p-3 break-all">{movement.reference}</td>
+              <td className={`p-3 text-right font-semibold ${movement.direction === 'IN' ? 'text-emerald-700' : 'text-red-700'}`}>
+                {movement.direction === 'IN' ? '+' : '-'}{movement.quantity} {item.unit}
+              </td>
+            </tr>;
+          })}</tbody>
+        </table>
+        {visible.length === 0 && <p className="p-8 text-center text-slate-500">
+          {movements.length === 0 ? 'Belum ada pergerakan stok.' : 'Tidak ada hasil untuk filter ini.'}
+        </p>}
+      </div>}
+    <p className="text-xs text-slate-500">Riwayat penjualan resep sebelum migrasi tidak memiliki catatan pemakaian bahan. Pergerakannya tidak direkonstruksi otomatis.</p>
+  </main>;
 }

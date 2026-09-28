@@ -2,15 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { Search, Loader2, X, Save, History, ClipboardEdit, Trash2, Info, Package, TestTube2 } from 'lucide-react';
 import { createStockAdjustment, deleteAdjustments } from '@/app/actions/inventory';
 import clsx from 'clsx';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function StockAdjustments() {
   const router = useRouter();
@@ -42,11 +39,6 @@ export default function StockAdjustments() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    const authStr = sessionStorage.getItem('admin_auth');
-    if (!authStr) {
-      router.push('/admin/login');
-      return;
-    }
     fetchAdjustments();
   }, [router]);
 

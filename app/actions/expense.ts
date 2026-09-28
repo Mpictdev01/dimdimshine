@@ -1,58 +1,29 @@
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
+import { db } from '@/lib/server/db';
+import { requireRole } from '@/lib/server/session';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-export async function createExpense(
-  shiftId: string,
-  cashierId: string,
-  amount: number,
-  description: string
-) {
+export async function createExpense(shiftId: string, _cashierId: string, amount: number, description: string) {
   try {
-    if (!description.trim()) {
-      return { success: false, error: 'Deskripsi tidak boleh kosong' };
-    }
-    if (amount <= 0) {
-      return { success: false, error: 'Jumlah harus lebih dari 0' };
-    }
-
-    const { data: expense, error } = await supabase
-      .from('expenses')
-      .insert([
-        {
-          shift_id: shiftId,
-          cashier_id: cashierId,
-          amount,
-          description: description.trim(),
-        }
-      ])
-      .select()
-      .single();
-
+    const actor = await requireRole(['cashier','manager','super_admin']);
+    if (!Number.isFinite(amount) || amount <= 0 || !description?.trim()) throw new Error('Jumlah atau deskripsi tidak valid');
+    const { data, error } = await db().rpc('pos_create_expense', { p_user_id: actor.userId,
+      p_shift_id: shiftId, p_amount: amount, p_description: description.trim() });
     if (error) throw error;
-
-    return { success: true, expense };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Gagal mencatat pengeluaran' };
+    return { success: true as const, expense: data };
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : 'Gagal mencatat pengeluaran' };
   }
 }
 
 export async function deleteExpense(expenseId: string) {
   try {
-    const { error } = await supabase
-      .from('expenses')
-      .delete()
-      .eq('id', expenseId);
-
+    const actor = await requireRole(['cashier','manager','super_admin']);
+    const { error } = await db().rpc('pos_delete_expense', { p_actor_id: actor.userId,
+      p_expense_id: expenseId, p_is_admin: actor.role !== 'cashier' });
     if (error) throw error;
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Gagal menghapus pengeluaran' };
+    return { success: true as const };
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : 'Gagal menghapus pengeluaran' };
   }
 }

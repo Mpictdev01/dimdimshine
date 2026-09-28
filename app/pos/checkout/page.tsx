@@ -1,16 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePosStore } from '@/lib/store/usePosStore';
-import { processTransaction } from '@/app/actions/transaction';
-import { ArrowLeft, Banknote, CreditCard, QrCode, CheckCircle2, Printer, Loader2, Clock, FileText } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { processTransaction, quoteSale } from '@/app/actions/transaction';
+import { ArrowLeft, Banknote, QrCode, CheckCircle2, Printer, Loader2 } from 'lucide-react';
+import { browserDataClient } from '@/lib/browser-data-client';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 interface CompletedTransaction {
   id: string;
@@ -22,27 +19,44 @@ interface CompletedTransaction {
   items: { name: string; quantity: number; price: number }[];
 }
 
+type SaleQuote = { hash: string; subtotal: number; tax: number; total: number; taxRate: number;
+  items: { productId: string; name: string; quantity: number; price: number }[] };
+
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, currentShift, orderType, notes, setNotes, clearCart } = usePosStore();
+  const { cart, currentShift, clearCart } = usePosStore();
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris'>('cash');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [lastTxId, setLastTxId] = useState<string | null>(null);
   const [completedTx, setCompletedTx] = useState<CompletedTransaction | null>(null);
-  const [taxRate, setTaxRate] = useState(11);
+  const [quoteRecord, setQuoteRecord] = useState<{ key: string; quote: SaleQuote } | null>(null);
+  const [quoteError, setQuoteError] = useState('');
+  const [qrisConfirmed, setQrisConfirmed] = useState(false);
+  const idempotencyKey = useRef<string | null>(null);
   const [storeInfo, setStoreInfo] = useState({ name: 'DIMDIM SHINE POS', address: '' });
 
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data } = await supabase.from('store_settings').select('store_name, address, tax_rate').limit(1).single();
+      const { data } = await supabase.from('store_settings').select('store_name, address').limit(1).single();
       if (data) {
-        if (data.tax_rate !== undefined) setTaxRate(data.tax_rate);
         if (data.store_name) setStoreInfo({ name: data.store_name, address: data.address || '' });
       }
     };
     fetchSettings();
   }, []);
+
+  const cartKey = cart.map(item => `${item.id}:${item.quantity}`).join('|');
+  const quote = quoteRecord?.key === cartKey ? quoteRecord.quote : null;
+  useEffect(() => {
+    if (!cart.length) return;
+    let cancelled = false;
+    quoteSale(cart.map(item => ({ productId: item.productId, quantity: item.quantity }))).then(result => {
+      if (cancelled) return;
+      if (result.success) { setQuoteRecord({ key: cartKey, quote: result.quote as SaleQuote }); setQuoteError(''); }
+      else { setQuoteRecord(null); setQuoteError(result.error); }
+    });
+    return () => { cancelled = true; };
+  }, [cart, cartKey]);
 
   useEffect(() => {
     if (!currentShift) {
@@ -56,28 +70,22 @@ export default function CheckoutPage() {
     return null;
   }
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const tax = subtotal * (taxRate / 100);
-  const total = subtotal + tax;
+  const subtotal = Number(quote?.subtotal ?? 0);
+  const tax = Number(quote?.tax ?? 0);
+  const total = Number(quote?.total ?? 0);
+  const taxRate = Number(quote?.taxRate ?? 0);
+  const quoteItems = new Map(quote?.items.map(item => [item.productId, item]) ?? []);
 
   const handleCheckout = async () => {
-
+    if (!quote || (paymentMethod === 'qris' && !qrisConfirmed)) return;
+    idempotencyKey.current ??= crypto.randomUUID();
     setIsLoading(true);
-
     const payload = {
-      shift_id: currentShift.id,
-      cashier_id: currentShift.cashierId,
-      customer_id: null,
-      order_type: orderType,
-      subtotal,
-      tax,
-      service_charge: 0,
-      total,
+      items: cart.map(item => ({ productId: item.productId, quantity: item.quantity })),
       payment_method: paymentMethod,
-      payment_status: 'paid',
-      due_date: null,
-      table_number: notes || null,
-      items: cart
+      qris_confirmed: qrisConfirmed,
+      quote_hash: quote.hash,
+      idempotency_key: idempotencyKey.current,
     };
 
     const res = await processTransaction(payload);
@@ -85,21 +93,23 @@ export default function CheckoutPage() {
 
     if (res.success) {
       const txId = res.transaction?.id || '';
-      setLastTxId(txId);
       setCompletedTx({
         id: txId,
-        total,
-        subtotal,
-        tax,
+        total: Number(res.transaction.total),
+        subtotal: Number(res.transaction.subtotal),
+        tax: Number(res.transaction.tax),
         paymentMethod,
-        orderType,
-        items: cart.map(i => ({ name: i.name, quantity: i.quantity, price: i.price }))
+        orderType: 'sale',
+        items: quote.items.map(i => ({ name: i.name, quantity: i.quantity, price: Number(i.price) }))
       });
       setIsSuccess(true);
       clearCart();
-      setNotes('');
     } else {
-      alert(res.error || 'Terjadi kesalahan saat memproses pembayaran');
+      if (res.error === 'QUOTE_CHANGED') {
+        const latest = await quoteSale(payload.items);
+        if (latest.success) setQuoteRecord({ key: cartKey, quote: latest.quote as SaleQuote });
+        alert('Harga atau tarif berubah. Periksa total baru sebelum menyimpan.');
+      } else alert(res.error || 'Terjadi kesalahan saat memproses pembayaran');
     }
   };
 
@@ -129,7 +139,7 @@ export default function CheckoutPage() {
           </div>
           <div className="truncate">Tx : {completedTx.id}</div>
           <div>Kasir: {currentShift?.cashierName || 'Sales'}</div>
-          <div>Order: {completedTx.orderType === 'delivery' ? 'KIRIM' : 'AMBIL'} ({completedTx.paymentMethod.toUpperCase()})</div>
+          <div>Penjualan ({completedTx.paymentMethod.toUpperCase()})</div>
           <div className="text-center my-1">--------------------------------</div>
           
           <div className="space-y-1">
@@ -182,7 +192,7 @@ export default function CheckoutPage() {
             <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl mb-3 text-left border border-slate-100 relative flex-1 flex flex-col min-h-0 overflow-hidden">
               <h3 className="font-bold text-sm sm:text-base mb-2 pb-2 border-b border-dashed border-slate-300 text-slate-700 flex justify-between items-center shrink-0">
                 <span>Struk Pesanan</span>
-                <span className="text-[11px] font-normal text-slate-400 uppercase tracking-wider">{completedTx.paymentMethod === 'cash' ? 'Tunai' : 'QRIS'} • {completedTx.orderType === 'delivery' ? 'Kirim' : 'Ambil'}</span>
+                <span className="text-[11px] font-normal text-slate-400 uppercase tracking-wider">{completedTx.paymentMethod === 'cash' ? 'Tunai' : 'QRIS'} • Penjualan</span>
               </h3>
               
               <div className="border-b border-slate-200 pb-2 mb-2 space-y-1.5 overflow-y-auto flex-1 pr-1 custom-scrollbar min-h-[40px]">
@@ -245,27 +255,28 @@ export default function CheckoutPage() {
           <div>
             <h1 className="text-xl font-bold text-white tracking-tight">Detail Pembayaran</h1>
             <p className="text-sm text-slate-400 mt-0.5">
-              <span className="inline-flex items-center justify-center bg-slate-800 px-2 py-0.5 rounded text-xs font-medium mr-2">{orderType === 'delivery' ? 'Kirim' : 'Ambil Sendiri'}</span>
-              {cart.length} item {notes ? ` • Catatan: ${notes}` : ''}
+              <span className="inline-flex items-center justify-center bg-slate-800 px-2 py-0.5 rounded text-xs font-medium mr-2">Penjualan</span>
+              {cart.length} item
             </p>
           </div>
         </div>
 
         <div className="p-6 space-y-3 bg-slate-900 flex-1">
-          {cart.map(item => (
-            <div key={item.id} className="flex justify-between items-center bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
+          {cart.map(item => {
+            const priced = quoteItems.get(item.productId);
+            return <div key={item.id} className="flex justify-between items-center bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
               <div className="flex gap-4 items-center">
                 <span className="w-9 h-9 bg-slate-700 text-white rounded-xl flex items-center justify-center font-bold text-sm shadow-inner shrink-0">
                   {item.quantity}
                 </span>
                 <div>
-                  <h3 className="font-semibold text-white">{item.name}</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">{formatPrice(item.price)} per unit</p>
+                  <h3 className="font-semibold text-white">{priced?.name ?? item.name}</h3>
+                  <p className="text-slate-400 text-xs mt-0.5">{priced ? formatPrice(Number(priced.price)) : 'Menghitung...'} per unit</p>
                 </div>
               </div>
-              <span className="font-semibold text-white ml-2 shrink-0">{formatPrice(item.price * item.quantity)}</span>
+              <span className="font-semibold text-white ml-2 shrink-0">{priced ? formatPrice(Number(priced.price) * item.quantity) : 'Menghitung...'}</span>
             </div>
-          ))}
+          })}
         </div>
 
         <div className="p-6 sm:p-8 bg-slate-950 border-t border-slate-800 sticky bottom-0 z-10">
@@ -317,9 +328,14 @@ export default function CheckoutPage() {
           </div>
 
           <div className="mt-auto pt-8">
+            {paymentMethod === 'qris' && <label className="mb-4 flex items-start gap-3 rounded-xl bg-emerald-50 p-3 text-sm text-slate-700">
+              <input type="checkbox" checked={qrisConfirmed} onChange={event => setQrisConfirmed(event.target.checked)} className="mt-1" />
+              Saya sudah menerima pembayaran QRIS
+            </label>}
+            {quoteError && <p role="alert" className="mb-3 text-sm text-red-700">{quoteError}</p>}
             <button
               onClick={handleCheckout}
-              disabled={isLoading}
+              disabled={isLoading || !quote || (paymentMethod === 'qris' && !qrisConfirmed)}
               className="w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-5 rounded-2xl text-xl shadow-xl shadow-blue-600/20 active:scale-[0.98] transition-all disabled:shadow-none"
             >
               {isLoading ? <Loader2 className="animate-spin" size={28} /> : 'Proses Pembayaran'}

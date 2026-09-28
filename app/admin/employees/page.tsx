@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { Plus, Trash2, Key, Loader2, ShieldCheck, User, X, Save } from 'lucide-react';
 import clsx from 'clsx';
+import { currentSession } from '@/app/actions/auth';
+import { deactivateEmployee, saveEmployee } from '@/app/actions/employees';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function AdminEmployees() {
   const router = useRouter();
@@ -23,17 +22,15 @@ export default function AdminEmployees() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const authStr = sessionStorage.getItem('admin_auth');
-    if (!authStr) {
-      router.push('/admin/login');
-      return;
-    }
+    currentSession().then(active => {
+      if (active?.role !== 'super_admin') router.replace('/admin');
+    });
     fetchEmployees();
   }, [router]);
 
   const fetchEmployees = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase.from('users').select('*').order('role');
+    const { data, error } = await supabase.from('users').select('id,full_name,role').order('role');
     if (!error && data) {
       setEmployees(data);
     }
@@ -47,11 +44,11 @@ export default function AdminEmployees() {
     }
     if (!confirm('Apakah Anda yakin ingin menghapus karyawan ini? Data riwayat shift tidak akan terhapus namun akan menjadi "Unknown User".')) return;
     
-    const { error } = await supabase.from('users').delete().eq('id', id);
-    if (!error) {
+    const result = await deactivateEmployee(id);
+    if (result.success) {
       setEmployees(employees.filter(emp => emp.id !== id));
     } else {
-      alert('Gagal menghapus karyawan');
+      alert(result.error);
     }
   };
 
@@ -61,7 +58,7 @@ export default function AdminEmployees() {
       setFormData({
         full_name: emp.full_name,
         role: emp.role,
-        pin: emp.pin
+        pin: ''
       });
     } else {
       setEditingEmployee(null);
@@ -79,40 +76,9 @@ export default function AdminEmployees() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const payload = {
-      full_name: formData.full_name,
-      role: formData.role,
-      pin: formData.pin
-    };
-
-    if (editingEmployee) {
-      const { data, error } = await supabase
-        .from('users')
-        .update(payload)
-        .eq('id', editingEmployee.id)
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setEmployees(employees.map(emp => emp.id === data.id ? data : emp));
-        closeModal();
-      } else {
-        alert('Gagal memperbarui karyawan (Mungkin PIN sudah digunakan).');
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('users')
-        .insert([payload])
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setEmployees([...employees, data]);
-        closeModal();
-      } else {
-        alert('Gagal menambahkan karyawan (Mungkin PIN sudah digunakan).');
-      }
-    }
+    const result = await saveEmployee(editingEmployee?.id ?? null, formData.full_name, formData.role, formData.pin);
+    if (result.success) { await fetchEmployees(); closeModal(); }
+    else alert(result.error);
     setIsSubmitting(false);
   };
 
@@ -155,7 +121,7 @@ export default function AdminEmployees() {
                 <tr className="text-slate-500 text-sm border-b border-slate-200">
                   <th className="font-medium p-4 pl-6">Nama Lengkap</th>
                   <th className="font-medium p-4">Role Akses</th>
-                  <th className="font-medium p-4">PIN Code</th>
+                  <th className="font-medium p-4">PIN</th>
                   <th className="font-medium p-4 text-right pr-6">Aksi</th>
                 </tr>
               </thead>
@@ -171,7 +137,7 @@ export default function AdminEmployees() {
                     <td className="p-4">
                       <div className="flex items-center gap-2 text-slate-400 font-mono text-sm">
                         <Key size={14} />
-                        ****
+                        Tersembunyi
                         <button 
                           onClick={() => openModal(emp)}
                           className="text-xs ml-2 text-blue-500 hover:underline font-sans"
@@ -249,15 +215,16 @@ export default function AdminEmployees() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">PIN Login</label>
+                  <label htmlFor="employee-pin" className="block text-sm font-semibold text-slate-700 mb-1.5">{editingEmployee ? 'PIN baru (opsional)' : 'PIN baru'}</label>
                   <input 
-                    type="text" 
-                    required
+                    id="employee-pin"
+                    type="password" inputMode="numeric" autoComplete="new-password"
+                    required={!editingEmployee}
                     value={formData.pin}
                     onChange={e => setFormData({...formData, pin: e.target.value})}
                     className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-colors" 
-                    placeholder="Misal: 4321" 
-                    maxLength={10}
+                    placeholder="6–8 digit"
+                    minLength={6} maxLength={8} pattern="[0-9]{6,8}"
                   />
                 </div>
               </div>

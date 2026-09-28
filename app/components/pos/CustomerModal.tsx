@@ -3,12 +3,9 @@
 import { useState, useEffect } from 'react';
 import { usePosStore } from '@/lib/store/usePosStore';
 import { X, Search, User, Loader2, Plus } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function CustomerModal({ onClose }: { onClose: () => void }) {
   const { activeCustomer, setActiveCustomer } = usePosStore();

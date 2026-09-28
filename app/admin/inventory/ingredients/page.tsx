@@ -1,14 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
+import { saveIngredient, deleteIngredient } from '@/app/actions/ingredients';
 import { Plus, Edit2, Trash2, Search, Loader2, X, Save } from 'lucide-react';
 import clsx from 'clsx';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function AdminIngredients() {
   const [ingredients, setIngredients] = useState<any[]>([]);
@@ -46,11 +44,11 @@ export default function AdminIngredients() {
   const handleDelete = async (id: string) => {
     if (!confirm('Apakah Anda yakin ingin menghapus bahan baku ini?')) return;
     
-    const { error } = await supabase.from('ingredients').delete().eq('id', id);
-    if (!error) {
+    const result = await deleteIngredient(id);
+    if (result.success) {
       setIngredients(ingredients.filter(p => p.id !== id));
     } else {
-      alert('Gagal menghapus bahan baku! Pastikan bahan ini tidak dipakai di produk manapun.\n\nDetail: ' + error.message);
+      alert(result.error);
     }
   };
 
@@ -81,43 +79,13 @@ export default function AdminIngredients() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const basePayload = {
-      name: formData.name,
-      unit: formData.unit,
-      min_stock_alert: parseFloat(formData.min_stock_alert) || 0,
-      yield_quantity: parseFloat(formData.yield_quantity) || 1,
-      yield_unit: formData.yield_unit || formData.unit,
-      cost_price: parseFloat(formData.cost_price) || 0
-    };
-
-    if (editingIngredient) {
-      const { data, error } = await supabase
-        .from('ingredients')
-        .update(basePayload)
-        .eq('id', editingIngredient.id)
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setIngredients(ingredients.map(p => p.id === data.id ? data : p));
-        closeModal();
-      } else {
-        alert('Gagal memperbarui bahan baku: ' + (error?.message || 'Unknown error'));
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('ingredients')
-        .insert([{...basePayload, current_stock: 0}])
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setIngredients([data, ...ingredients]);
-        closeModal();
-      } else {
-        alert('Gagal menambahkan bahan baku: ' + (error?.message || 'Pastikan Anda sudah menjalankan SQL Update No 5 & 6!'));
-      }
-    }
+    const result = await saveIngredient({ id: editingIngredient?.id ?? null,
+      name: formData.name, unit: formData.unit,
+      minStockAlert: Number(formData.min_stock_alert), yieldQuantity: Number(formData.yield_quantity),
+      yieldUnit: formData.yield_unit || formData.unit, costPrice: Number(formData.cost_price),
+    });
+    if (result.success) { await fetchIngredients(); closeModal(); }
+    else alert(result.error);
     setIsSubmitting(false);
   };
 

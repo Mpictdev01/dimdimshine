@@ -1,276 +1,76 @@
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
+import { db } from '@/lib/server/db';
+import { requireRole } from '@/lib/server/session';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+type SaleItem = { productId: string; quantity: number };
 
-export async function processTransaction(payload: any) {
+function cleanItems(items: unknown): { product_id: string; quantity: number }[] {
+  if (!Array.isArray(items) || items.length < 1 || items.length > 100) throw new Error('Keranjang tidak valid');
+  return items.map((item: SaleItem) => {
+    if (!item || typeof item.productId !== 'string' || !/^[0-9a-f-]{36}$/.test(item.productId) ||
+      !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 10000) throw new Error('Jumlah produk tidak valid');
+    return { product_id: item.productId, quantity: item.quantity };
+  });
+}
+
+export async function quoteSale(items: SaleItem[]) {
   try {
-    const { 
-      shift_id, cashier_id, customer_id, order_type, 
-      subtotal, tax, service_charge, total, 
-      payment_method, payment_status, due_date, table_number, items 
-    } = payload;
-
-    // 1. Create transaction
-    const { data: transaction, error: txError } = await supabase
-      .from('transactions')
-      .insert([{
-        shift_id,
-        cashier_id,
-        customer_id: customer_id || null,
-        order_type,
-        subtotal,
-        tax,
-        total,
-        payment_method,
-        payment_status: payment_status || 'paid',
-        due_date: due_date || null,
-        table_number: table_number || null
-      }])
-      .select()
-      .single();
-
-    if (txError) throw txError;
-
-    // Fetch products to get cost_price, current stock, and their BOM (product_ingredients)
-    const productIds = items.map((i: any) => i.productId);
-    const { data: products } = await supabase
-      .from('products')
-      .select('id, stock, cost_price, product_ingredients(ingredient_id, quantity)')
-      .in('id', productIds);
-
-    const productsMap = new Map(products?.map(p => [p.id, p]) || []);
-
-    // Fetch ingredient costs to dynamically calculate BOM cost
-    let ingredientIds: string[] = [];
-    products?.forEach(p => {
-      if (p.product_ingredients) {
-        p.product_ingredients.forEach((pi: any) => ingredientIds.push(pi.ingredient_id));
-      }
-    });
-    
-    let ingredientsMap = new Map();
-    if (ingredientIds.length > 0) {
-      const { data: ingredients } = await supabase
-        .from('ingredients')
-        .select('id, cost_price')
-        .in('id', ingredientIds);
-      ingredientsMap = new Map(ingredients?.map(i => [i.id, i]) || []);
-    }
-
-    // 2. Create transaction items
-    const txItems = items.map((item: any) => {
-      const prod = productsMap.get(item.productId);
-      let calculatedCostPrice = prod?.cost_price || 0;
-      
-      if (prod?.product_ingredients && prod.product_ingredients.length > 0) {
-        let bomCost = 0;
-        for (const pi of prod.product_ingredients) {
-          const ing = ingredientsMap.get(pi.ingredient_id);
-          bomCost += (ing?.cost_price || 0) * pi.quantity;
-        }
-        calculatedCostPrice = bomCost;
-      }
-
-      return {
-        transaction_id: transaction.id,
-        product_id: item.productId,
-        quantity: item.quantity,
-        price: item.price,
-        cost_price: calculatedCostPrice
-      };
-    });
-
-    const { error: itemsError } = await supabase
-      .from('transaction_items')
-      .insert(txItems);
-
-    if (itemsError) throw itemsError;
-
-    // 3. Deduct inventory (Bahan Baku / Stok Fisik)
-    for (const item of items) {
-      const prod = productsMap.get(item.productId);
-      if (prod) {
-        // Cek apakah punya resep (BOM)
-        if (prod.product_ingredients && prod.product_ingredients.length > 0) {
-          // Potong stok dari bahan baku
-          for (const pi of prod.product_ingredients) {
-            // Ambil stok bahan baku saat ini
-            const { data: ing } = await supabase
-              .from('ingredients')
-              .select('current_stock')
-              .eq('id', pi.ingredient_id)
-              .single();
-              
-            if (ing) {
-              const deductedStock = item.quantity * pi.quantity;
-              await supabase
-                .from('ingredients')
-                .update({ current_stock: (ing.current_stock || 0) - deductedStock })
-                .eq('id', pi.ingredient_id);
-            }
-          }
-        } else {
-          // Tidak ada resep, potong stok fisik produk
-          if (typeof prod.stock === 'number') {
-            await supabase
-              .from('products')
-              .update({ stock: prod.stock - item.quantity })
-              .eq('id', item.productId);
-          }
-        }
-      }
-    }
-
-    return { success: true, transaction };
-  } catch (err: any) {
-    console.error('Transaction processing error:', err);
-    return { success: false, error: err.message || 'Gagal memproses transaksi' };
+    await requireRole(['cashier','manager','super_admin']);
+    const { data, error } = await db().rpc('pos_quote', { p_items: cleanItems(items) });
+    if (error) throw error;
+    return { success: true as const, quote: data };
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : 'Gagal menghitung harga' };
   }
 }
 
-export async function deleteTransaction(txId: string, shouldRestoreStock: boolean = true) {
+export async function processTransaction(payload: {
+  items: SaleItem[]; payment_method: 'cash' | 'qris'; qris_confirmed?: boolean;
+  quote_hash: string; idempotency_key: string;
+}) {
   try {
-    // 1. Ambil data transaction_items beserta info produk
-    const { data: txItems, error: fetchError } = await supabase
-      .from('transaction_items')
-      .select('product_id, quantity')
-      .eq('transaction_id', txId);
-
-    if (fetchError) throw fetchError;
-
-    // 2. Kembalikan stok ke masing-masing produk JIKA di-request
-    if (shouldRestoreStock && txItems && txItems.length > 0) {
-      for (const item of txItems) {
-        // Ambil info produk dan BOM-nya
-        const { data: prod } = await supabase
-          .from('products')
-          .select('stock, product_ingredients(ingredient_id, quantity)')
-          .eq('id', item.product_id)
-          .single();
-          
-        if (prod) {
-          if (prod.product_ingredients && prod.product_ingredients.length > 0) {
-            // Kembalikan ke bahan baku
-            for (const pi of prod.product_ingredients) {
-              const { data: ing } = await supabase
-                .from('ingredients')
-                .select('current_stock')
-                .eq('id', pi.ingredient_id)
-                .single();
-              
-              if (ing) {
-                const restoredStock = item.quantity * pi.quantity;
-                await supabase
-                  .from('ingredients')
-                  .update({ current_stock: (ing.current_stock || 0) + restoredStock })
-                  .eq('id', pi.ingredient_id);
-              }
-            }
-          } else {
-            // Kembalikan stok fisik produk
-            if (typeof prod.stock === 'number') {
-              await supabase
-                .from('products')
-                .update({ stock: prod.stock + item.quantity })
-                .eq('id', item.product_id);
-            }
-          }
-        }
-      }
-    }
-
-    // 3. Hapus transaction_items (meskipun sudah cascade, kita pastikan)
-    const { error: delItemsError } = await supabase
-      .from('transaction_items')
-      .delete()
-      .eq('transaction_id', txId);
-
-    if (delItemsError) throw delItemsError;
-
-    // 4. Hapus transaksi utama
-    const { error: delTxError } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', txId);
-
-    if (delTxError) throw delTxError;
-
-    return { success: true };
-  } catch (err: any) {
-    console.error('Delete transaction error:', err);
-    return { success: false, error: err.message || 'Gagal menghapus transaksi' };
+    const actor = await requireRole(['cashier','manager','super_admin']);
+    const items = cleanItems(payload.items);
+    if (!['cash','qris'].includes(payload.payment_method) || !/^[0-9a-f]{64}$/.test(payload.quote_hash) ||
+      !/^[0-9a-f-]{36}$/.test(payload.idempotency_key)) throw new Error('Data pembayaran tidak valid');
+    const { data: shift, error: shiftError } = await db().from('shifts').select('id')
+      .eq('cashier_id', actor.userId).eq('status', 'open').limit(1).maybeSingle();
+    if (shiftError) throw shiftError;
+    if (!shift) throw new Error('Buka shift dahulu');
+    const { data, error } = await db().rpc('pos_create_sale', {
+      p_user_id: actor.userId, p_shift_id: shift.id, p_items: items,
+      p_payment_method: payload.payment_method, p_qris_confirmed: !!payload.qris_confirmed,
+      p_quote_hash: payload.quote_hash, p_idempotency_key: payload.idempotency_key,
+    });
+    if (error) throw error;
+    return { success: true as const, transaction: data };
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : 'Gagal menyimpan penjualan' };
   }
 }
 
-export async function deleteTransactions(txIds: string[], shouldRestoreStock: boolean = true) {
+export async function deleteTransaction(txId: string, shouldRestoreStock = true) {
   try {
-    if (shouldRestoreStock) {
-      // 1. Ambil data semua transaction_items dari ID yang dipilih
-      const { data: txItems, error: fetchError } = await supabase
-        .from('transaction_items')
-        .select('product_id, quantity')
-        .in('transaction_id', txIds);
+    const actor = await requireRole(['manager','super_admin']);
+    const { error } = await db().rpc('pos_void_sale', { p_tx_id: txId, p_actor_id: actor.userId, p_restore_stock: shouldRestoreStock });
+    if (error) throw error;
+    return { success: true as const };
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : 'Gagal membatalkan transaksi' };
+  }
+}
 
-      if (fetchError) throw fetchError;
-
-      // 2. Kembalikan stok satu-satu dengan logika BOM
-      if (txItems && txItems.length > 0) {
-        for (const item of txItems) {
-          // Ambil info produk dan BOM-nya
-          const { data: prod } = await supabase
-            .from('products')
-            .select('stock, product_ingredients(ingredient_id, quantity)')
-            .eq('id', item.product_id)
-            .single();
-            
-          if (prod) {
-            if (prod.product_ingredients && prod.product_ingredients.length > 0) {
-              // Kembalikan ke bahan baku
-              for (const pi of prod.product_ingredients) {
-                const { data: ing } = await supabase
-                  .from('ingredients')
-                  .select('current_stock')
-                  .eq('id', pi.ingredient_id)
-                  .single();
-                
-                if (ing) {
-                  const restoredStock = item.quantity * pi.quantity;
-                  await supabase
-                    .from('ingredients')
-                    .update({ current_stock: (ing.current_stock || 0) + restoredStock })
-                    .eq('id', pi.ingredient_id);
-                }
-              }
-            } else {
-              // Kembalikan stok fisik produk
-              if (typeof prod.stock === 'number') {
-                await supabase
-                  .from('products')
-                  .update({ stock: prod.stock + item.quantity })
-                  .eq('id', item.product_id);
-              }
-            }
-          }
-        }
-      }
+export async function deleteTransactions(txIds: string[], shouldRestoreStock = true) {
+  try {
+    const actor = await requireRole(['manager','super_admin']);
+    if (!Array.isArray(txIds) || txIds.length > 100) throw new Error('Daftar transaksi tidak valid');
+    for (const txId of txIds) {
+      const { error } = await db().rpc('pos_void_sale', { p_tx_id: txId, p_actor_id: actor.userId, p_restore_stock: shouldRestoreStock });
+      if (error) throw error;
     }
-
-    // 4. Hapus transaksi utama (karena cascade, transaction_items otomatis terhapus)
-    const { error: delTxError } = await supabase
-      .from('transactions')
-      .delete()
-      .in('id', txIds);
-
-    if (delTxError) throw delTxError;
-
-    return { success: true };
-  } catch (err: any) {
-    console.error('Delete transactions error:', err);
-    return { success: false, error: err.message || 'Gagal menghapus transaksi' };
+    return { success: true as const };
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : 'Gagal membatalkan transaksi' };
   }
 }

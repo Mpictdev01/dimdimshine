@@ -1,13 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { X, Loader2, Search, Boxes } from 'lucide-react';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 interface IngredientsStockModalProps {
   onClose: () => void;
@@ -16,10 +13,11 @@ interface IngredientsStockModalProps {
 export default function IngredientsStockModal({ onClose }: IngredientsStockModalProps) {
   const [ingredients, setIngredients] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchIngredients = async () => {
-    setIsLoading(true);
+    setIsLoading(true); setLoadError('');
     try {
       const { data, error } = await supabase
         .from('ingredients')
@@ -28,8 +26,8 @@ export default function IngredientsStockModal({ onClose }: IngredientsStockModal
 
       if (error) throw error;
       if (data) setIngredients(data);
-    } catch (err) {
-      console.error('Gagal mengambil data bahan baku:', err);
+    } catch {
+      setLoadError('Stok bahan baku gagal dimuat.');
     } finally {
       setIsLoading(false);
     }
@@ -71,6 +69,10 @@ export default function IngredientsStockModal({ onClose }: IngredientsStockModal
             <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
             <p>Memuat data stok bahan baku...</p>
           </div>
+        ) : loadError ? (
+          <div role="alert" className="h-full flex flex-col items-center justify-center gap-3 text-red-700">
+            <p>{loadError}</p><button onClick={fetchIngredients} className="rounded-lg bg-blue-600 px-4 py-2 text-white">Coba lagi</button>
+          </div>
         ) : (
           <div className="max-w-3xl mx-auto space-y-6 pb-8">
             
@@ -82,6 +84,7 @@ export default function IngredientsStockModal({ onClose }: IngredientsStockModal
               <input
                 type="text"
                 placeholder="Cari nama bahan baku..."
+                aria-label="Cari nama bahan baku"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
@@ -132,7 +135,7 @@ export default function IngredientsStockModal({ onClose }: IngredientsStockModal
                     {filteredIngredients.length === 0 && (
                       <tr>
                         <td colSpan={2} className="p-8 text-center text-slate-400">
-                          Tidak ada bahan baku yang ditemukan.
+                          {ingredients.length ? 'Tidak ada hasil pencarian bahan baku.' : 'Belum ada bahan baku.'}
                         </td>
                       </tr>
                     )}

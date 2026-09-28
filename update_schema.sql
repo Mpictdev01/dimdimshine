@@ -1,3 +1,5 @@
+-- LEGACY SCHEMA ONLY. Do not apply: it grants anon full access.
+-- Use supabase/migrations and supabase/cutover/lock_down_anon.sql instead.
 -- SQL Schema Update for BOM (Bill of Materials) Feature
 
 -- 1. Create the many-to-many relationship table between products and ingredients

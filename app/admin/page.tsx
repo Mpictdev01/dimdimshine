@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { Banknote, TrendingUp, TrendingDown, PackageSearch, AlertTriangle, Loader2, ArrowRight, Filter, ShoppingBag, Wallet } from 'lucide-react';
 import Link from 'next/link';
+import { localDateInput, localDateStart, localDateEnd } from '@/lib/local-date';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -34,7 +32,7 @@ export default function AdminDashboard() {
 
   // Filter Input States
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = localDateInput(today);
   const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState(todayStr);
   const [selectedPayment, setSelectedPayment] = useState('all');
@@ -51,11 +49,6 @@ export default function AdminDashboard() {
 
   // Initial Data Fetching (Master Data)
   useEffect(() => {
-    const authStr = sessionStorage.getItem('admin_auth');
-    if (!authStr) {
-      router.push('/admin/login');
-      return;
-    }
     
     const fetchMasterData = async () => {
       const [catRes] = await Promise.all([
@@ -72,15 +65,14 @@ export default function AdminDashboard() {
     const fetchDashboardData = async () => {
       setIsLoading(true);
       try {
-        const start = new Date(activeFilters.startDate);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(activeFilters.endDate);
-        end.setHours(23, 59, 59, 999);
+        const start = localDateStart(activeFilters.startDate);
+        const end = localDateEnd(activeFilters.endDate);
 
         // 1. Fetch transactions (Sales, Profit, Piutang)
         let txQuery = supabase
           .from('transactions')
           .select('total, subtotal, customer_id, payment_status, payment_method, transaction_items(product_id, quantity, price, cost_price)')
+          .neq('payment_status', 'void')
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
           
@@ -215,35 +207,13 @@ export default function AdminDashboard() {
         }
 
         // 3. Produk Stok Menipis (Independent dari filter tanggal)
-        const [prodRes, ingRes] = await Promise.all([
-          supabase.from('products').select('*, units(name), categories(name), product_ingredients(ingredient_id, quantity)'),
-          supabase.from('ingredients').select('id, current_stock')
-        ]);
-        
-        let lowStock: any[] = [];
-        
-        if (prodRes.data && ingRes.data) {
-          const ingredientsMap = new Map(ingRes.data.map(i => [i.id, i.current_stock || 0]));
-          
-          const mappedProducts = prodRes.data.map(p => {
-            let maxStock = p.stock || 0;
-            
-            if (p.product_ingredients && p.product_ingredients.length > 0) {
-              const possibleQuantities = p.product_ingredients.map((pi: any) => {
-                const availableIngStock = ingredientsMap.get(pi.ingredient_id) || 0;
-                return Math.floor(availableIngStock / pi.quantity);
-              });
-              maxStock = Math.min(...possibleQuantities);
-            }
-            
-            return { ...p, stock: maxStock };
-          });
-          
-          lowStock = mappedProducts
-            .filter(p => p.stock < 20)
-            .sort((a, b) => a.stock - b.stock)
-            .slice(0, 10);
-        }
+        const { data: ingredientsData } = await supabase.from('ingredients')
+          .select('id,name,current_stock,min_stock_alert,yield_quantity,unit,cost_price');
+        const lowStock = (ingredientsData ?? []).map(item => ({
+          id: item.id, name: item.name, categories: { name: 'Bahan Baku' },
+          price: Number(item.cost_price ?? 0), stock: Number(item.current_stock ?? 0) / Number(item.yield_quantity || 1),
+          threshold: Number(item.min_stock_alert ?? 0), units: { name: item.unit },
+        })).filter(item => item.stock <= item.threshold).sort((a,b) => a.stock - b.stock).slice(0,10);
 
         // 2.5 Pengeluaran (Expenses)
         const { data: expenseData } = await supabase
@@ -523,7 +493,7 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-red-900">Peringatan Stok Menipis</h2>
-                <p className="text-sm text-red-700">Produk-produk berikut memiliki sisa stok kurang dari 20. Segera lakukan restock ke pabrik!</p>
+                <p className="text-sm text-red-700">Bahan baku yang mencapai batas minimum masing-masing.</p>
               </div>
             </div>
             
@@ -531,9 +501,9 @@ export default function AdminDashboard() {
               <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr className="text-slate-500 text-sm">
-                    <th className="font-medium p-4 pl-6">Nama Produk</th>
+                    <th className="font-medium p-4 pl-6">Bahan Baku</th>
                     <th className="font-medium p-4">Kategori</th>
-                    <th className="font-medium p-4 text-right">Harga Jual</th>
+                    <th className="font-medium p-4 text-right">Biaya per Unit</th>
                     <th className="font-medium p-4 text-center pr-6">Sisa Stok Fisik</th>
                   </tr>
                 </thead>
@@ -564,7 +534,7 @@ export default function AdminDashboard() {
                           <PackageSearch size={32} />
                         </div>
                         <p className="font-semibold text-emerald-700 text-lg">Semua stok produk Anda dalam kondisi aman!</p>
-                        <p className="text-sm text-emerald-600/70 mt-1">Tidak ada produk dengan stok di bawah 20 unit.</p>
+                        <p className="text-sm text-emerald-600/70 mt-1">Tidak ada bahan baku di bawah batas minimumnya.</p>
                       </td>
                     </tr>
                   )}

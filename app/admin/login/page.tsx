@@ -1,93 +1,53 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { KeyRound, Loader2 } from 'lucide-react';
-import { loginWithPin } from '@/app/actions/shift';
+import { currentSession, listStaffAccounts, loginAccount, logoutAccount } from '@/app/actions/auth';
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const [accounts, setAccounts] = useState<{id:string; full_name:string}[]>([]);
+  const [userId, setUserId] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Jika sudah login, redirect
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (sessionStorage.getItem('admin_auth')) {
-      router.push('/admin');
-    }
+    currentSession().then(active => {
+      if (active?.mustChangePin) router.replace('/change-pin');
+      else if (active && active.role !== 'cashier') router.replace('/admin');
+    });
+    listStaffAccounts().then(setAccounts).catch(() => setError('Daftar akun gagal dimuat. Muat ulang halaman.'));
   }, [router]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pin) return;
-    
-    setIsLoading(true);
-    setError('');
-    
-    const res = await loginWithPin(pin);
-    setIsLoading(false);
-    
-    if (res.success && res.user) {
-      if (res.user.role === 'super_admin' || res.user.role === 'manager') {
-        sessionStorage.setItem('admin_auth', JSON.stringify(res.user));
-        router.push('/admin');
-      } else {
-        setError('Akses ditolak. Anda tidak memiliki izin Admin.');
-      }
-    } else {
-      setError(res.error || 'PIN tidak valid');
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true); setError('');
+    const result = await loginAccount(userId, pin);
+    setBusy(false);
+    if (!result.success) { setError(result.error); return; }
+    if (result.user.mustChangePin) { router.replace('/change-pin'); return; }
+    if (result.user.role === 'cashier') {
+      await logoutAccount();
+      setError('Akun kasir tidak memiliki akses admin.');
+      return;
     }
-  };
-
-  return (
-    <div className="flex h-screen w-full items-center justify-center bg-slate-900 absolute inset-0 z-50">
-      <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">DIMDIM SHINE <span className="text-blue-600">Admin</span></h1>
-          <p className="text-slate-500 mt-2 text-sm">Masukkan PIN Manager/Admin</p>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm mb-6 border border-red-100 text-center">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-              <KeyRound size={20} />
-            </div>
-            <input
-              type="password"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="PIN (misal: 9999)"
-              className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all"
-              autoFocus
-              required
-            />
-          </div>
-          
-          <button
-            type="submit"
-            disabled={isLoading || !pin}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm"
-          >
-            {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Masuk ke Dashboard'}
-          </button>
-        </form>
-        
-        <div className="mt-6 text-center">
-          <button 
-            onClick={() => router.push('/pos/shift')}
-            className="text-sm text-slate-500 hover:text-blue-600 transition-colors"
-          >
-            Kembali ke Aplikasi POS
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    router.replace('/admin');
+  }
+  return <main className="flex min-h-screen items-center justify-center bg-slate-900 p-4">
+    <form onSubmit={submit} className="w-full max-w-sm space-y-5 rounded-2xl bg-white p-7 shadow-xl">
+      <h1 className="text-2xl font-bold">DIMDIM SHINE Admin</h1>
+      <label htmlFor="account" className="block text-sm font-medium">Akun staf</label>
+      <select id="account" value={userId} onChange={event => setUserId(event.target.value)} required className="w-full rounded-lg border p-3">
+        <option value="">Pilih akun</option>
+        {accounts.map(account => <option key={account.id} value={account.id}>{account.full_name}</option>)}
+      </select>
+      <label htmlFor="admin-pin" className="block text-sm font-medium">PIN</label>
+      <input id="admin-pin" type="password" inputMode="numeric" autoComplete="current-password" value={pin}
+        onChange={event => setPin(event.target.value)} required className="w-full rounded-lg border p-3" />
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      <button disabled={busy || !userId} className="w-full rounded-lg bg-blue-600 p-3 font-bold text-white disabled:opacity-50">
+        {busy ? 'Memeriksa…' : 'Masuk Admin'}
+      </button>
+      <button type="button" onClick={() => router.push('/pos/shift')} className="w-full text-sm text-slate-500">Ke POS</button>
+    </form>
+  </main>;
 }

@@ -2,13 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { Save, Store, Receipt, Calculator, Loader2 } from 'lucide-react';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function AdminSettings() {
   const router = useRouter();
@@ -24,11 +21,6 @@ export default function AdminSettings() {
   });
 
   useEffect(() => {
-    const authStr = sessionStorage.getItem('admin_auth');
-    if (!authStr) {
-      router.push('/admin/login');
-      return;
-    }
     fetchSettings();
   }, [router]);
 

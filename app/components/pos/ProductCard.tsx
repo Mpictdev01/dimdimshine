@@ -37,9 +37,11 @@ export default function ProductCard({ product }: ProductCardProps) {
   };
 
   return (
-    <div 
+    <button type="button"
       onClick={handleAdd}
-      className="bg-white rounded-xl shadow-sm border border-slate-100 p-3 sm:p-4 cursor-pointer hover:shadow-md hover:border-blue-300 hover:bg-blue-50/50 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 active:scale-[0.99] group"
+      disabled={!product.stock || product.stock <= 0}
+      aria-label={`Tambah ${product.name} ke keranjang`}
+      className="w-full text-left bg-white rounded-xl shadow-sm border border-slate-100 p-3 sm:p-4 cursor-pointer hover:shadow-md hover:border-blue-300 hover:bg-blue-50/50 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 active:scale-[0.99] group disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <div className="flex flex-col w-full sm:w-auto">
         <h3 className="font-bold text-slate-800 text-base sm:text-lg group-hover:text-blue-700 transition-colors leading-tight">{product.name}</h3>
@@ -59,10 +61,10 @@ export default function ProductCard({ product }: ProductCardProps) {
       </div>
       <div className="flex items-center justify-between w-full sm:w-auto gap-4">
         <p className="text-blue-600 font-bold text-lg sm:text-xl">{formatPrice(product.price)}</p>
-        <button className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-50 sm:bg-slate-100 text-blue-600 sm:text-slate-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
+        <span className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-50 sm:bg-slate-100 text-blue-600 sm:text-slate-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
           <Plus size={18} className="sm:w-5 sm:h-5" />
-        </button>
+        </span>
       </div>
-    </div>
+    </button>
   );
 }

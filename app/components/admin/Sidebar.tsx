@@ -13,13 +13,12 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  ChevronDown,
-  Banknote,
   Menu,
   X
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
+import { currentSession, logoutAccount } from '@/app/actions/auth';
 
 const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
@@ -45,15 +44,6 @@ const menuItems = [
     ]
   },
   { 
-    name: 'Pelanggan', 
-    icon: Users,
-    path: '/admin/customers',
-    subItems: [
-      { name: 'Daftar Toko', path: '/admin/customers' },
-      { name: 'Area / Rute', path: '/admin/customers/areas' },
-    ]
-  },
-  { 
     name: 'Riwayat & Cetak', 
     icon: FileText, 
     path: '/admin/reports',
@@ -64,7 +54,6 @@ const menuItems = [
       { name: 'Rekap Stok', path: '/admin/reports/stock-summary' },
     ]
   },
-  { name: 'Piutang', icon: Banknote, path: '/admin/receivables' },
   { name: 'Sales & Pegawai', icon: Users, path: '/admin/employees' },
   { name: 'Pengaturan', icon: Settings, path: '/admin/settings' },
 ];
@@ -74,21 +63,34 @@ export default function Sidebar() {
   const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState({ path: pathname, open: false });
+  const isMobileOpen = mobileMenu.open && mobileMenu.path === pathname;
+  const setIsMobileOpen = (open: boolean) => setMobileMenu({ path: pathname, open });
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
-    setIsMobileOpen(false);
+    let cancelled = false;
+    if (pathname === '/admin/login') return;
+
+    currentSession()
+      .then(active => { if (!cancelled) setIsSuperAdmin(active?.role === 'super_admin'); })
+      .catch(() => { if (!cancelled) setIsSuperAdmin(false); });
+
+    return () => { cancelled = true; };
   }, [pathname]);
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('admin_auth');
-    router.push('/admin/login');
+  const handleLogout = async () => {
+    await logoutAccount();
+    setIsSuperAdmin(false);
+    router.replace('/admin/login');
   };
 
   const toggleMenu = (name: string) => {
     if (isCollapsed) setIsCollapsed(false);
     setExpandedMenus(prev => ({ ...prev, [name]: !prev[name] }));
   };
+
+  if (pathname === '/admin/login') return null;
 
   return (
     <>
@@ -142,7 +144,7 @@ export default function Sidebar() {
       </button>
 
       <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent">
-        {menuItems.map((item) => {
+        {menuItems.filter(item => item.path !== '/admin/employees' || isSuperAdmin).map((item) => {
           const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
           const hasSubItems = !!item.subItems;
           const isExpanded = expandedMenus[item.name];

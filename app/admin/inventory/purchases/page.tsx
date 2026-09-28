@@ -1,15 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { Plus, Loader2, X, Save, Search, Trash2, ShoppingCart, CheckSquare, Square, Check, ArrowRight, PackageCheck } from 'lucide-react';
 import { createPurchase } from '@/app/actions/purchase';
 import clsx from 'clsx';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 interface CartItem {
   id: string;

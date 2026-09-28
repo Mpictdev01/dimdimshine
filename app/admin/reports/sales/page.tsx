@@ -1,14 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
+import { localDateStart, localDateEnd } from '@/lib/local-date';
 import { Loader2, Search, FileText, Printer, FileDown, Trash2 } from 'lucide-react';
 import { deleteTransaction } from '@/app/actions/transaction';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function AdminSalesReports() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -62,6 +60,7 @@ export default function AdminSalesReports() {
           products(name, units(name))
         )
       `, { count: 'exact' });
+    query = query.neq('payment_status', 'void');
 
     // Filter status di server side (jika bukan 'all')
     if (filterStatus !== 'all') {
@@ -70,13 +69,11 @@ export default function AdminSalesReports() {
 
     // Filter tanggal
     if (startDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
+      const start = localDateStart(startDate);
       query = query.gte('created_at', start.toISOString());
     }
     if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
+      const end = localDateEnd(endDate);
       query = query.lte('created_at', end.toISOString());
     }
     
@@ -294,8 +291,10 @@ export default function AdminSalesReports() {
                     </td>
                     <td className="p-4">
                       <div className="font-semibold text-slate-800">
-                        {tx.customers?.name || (tx.table_number ? `Baru: ${tx.table_number}` : 'Pelanggan Umum')}
+                        {tx.customers?.name || (tx.order_type === 'sale' ? 'Penjualan langsung' : (tx.table_number ? `Baru: ${tx.table_number}` : 'Pelanggan Umum'))}
                       </div>
+                      {tx.payment_status === 'paid' && tx.transaction_items?.length === 0 &&
+                        <div className="text-xs font-semibold text-amber-700">Periksa manual: penjualan lunas tanpa item</div>}
                       {tx.customers?.name && tx.table_number && (
                         <div className="text-xs text-slate-500 mt-1">Catatan: {tx.table_number}</div>
                       )}
@@ -462,7 +461,7 @@ export default function AdminSalesReports() {
                   <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-6">
                     <div>
                       <h1 className="text-3xl font-black uppercase tracking-tight">
-                        {printType === 'surat_jalan' ? 'SURAT JALAN' : 'FAKTUR PENJUALAN'}
+                        {tx.order_type === 'sale' ? 'PENJUALAN' : printType === 'surat_jalan' ? 'SURAT JALAN' : 'FAKTUR PENJUALAN'}
                       </h1>
                       <p className="text-sm mt-1 font-medium">CV. DIMDIM SHINE DISTRIBUSI NUSANTARA</p>
                       <p className="text-xs text-slate-600">Jl. Raya Pusat Perdagangan No. 88, Kota<br/>Telp: 0812-3456-7890</p>

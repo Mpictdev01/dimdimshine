@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
+import { saveProduct, deleteProducts } from '@/app/actions/products';
 import { Plus, Edit2, Trash2, Search, Loader2, X, Save, Copy } from 'lucide-react';
 import clsx from 'clsx';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function AdminProducts() {
   const router = useRouter();
@@ -30,11 +28,6 @@ export default function AdminProducts() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const authStr = sessionStorage.getItem('admin_auth');
-    if (!authStr) {
-      router.push('/admin/login');
-      return;
-    }
     fetchProducts();
   }, [router]);
 
@@ -102,24 +95,24 @@ export default function AdminProducts() {
   const handleDelete = async (id: string) => {
     if (!confirm('Apakah Anda yakin ingin menghapus produk ini?')) return;
     
-    const { error } = await supabase.from('products').delete().eq('id', id);
-    if (!error) {
+    const result = await deleteProducts([id]);
+    if (result.success) {
       setProducts(products.filter(p => p.id !== id));
       setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
     } else {
-      alert('Gagal menghapus produk! Pastikan produk ini belum pernah masuk riwayat Penjualan atau Pembelian. \n\nDetail: ' + error.message);
+      alert(result.error);
     }
   };
 
   const handleBulkDelete = async () => {
     if (!confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} produk terpilih?`)) return;
     
-    const { error } = await supabase.from('products').delete().in('id', selectedIds);
-    if (!error) {
+    const result = await deleteProducts(selectedIds);
+    if (result.success) {
       setProducts(products.filter(p => !selectedIds.includes(p.id)));
       setSelectedIds([]);
     } else {
-      alert('Gagal menghapus beberapa produk. Pastikan produk tersebut belum ada riwayat transaksinya. \n\nDetail: ' + error.message);
+      alert(result.error);
     }
   };
 
@@ -196,68 +189,11 @@ export default function AdminProducts() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const formHpp = calculateFormHpp();
-    const basePayload = {
-      name: formData.name,
-      category_id: formData.category_id || null,
-      price: parseFloat(formData.price),
-      unit_id: formData.unit_id || null,
-      cost_price: formHpp
-    };
-
-    if (editingProduct) {
-      const { data, error } = await supabase
-        .from('products')
-        .update(basePayload)
-        .eq('id', editingProduct.id)
-        .select('*, units(name), categories(name)')
-        .single();
-        
-      if (!error && data) {
-        // Update ingredients
-        await supabase.from('product_ingredients').delete().eq('product_id', editingProduct.id);
-        if (formData.ingredients.length > 0) {
-          const ingPayload = formData.ingredients.map(ing => ({
-            product_id: editingProduct.id,
-            ingredient_id: ing.ingredient_id,
-            quantity: ing.quantity
-          }));
-          await supabase.from('product_ingredients').insert(ingPayload);
-        }
-        
-        // Refetch to get complete updated data
-        fetchProducts();
-        closeModal();
-      } else {
-        alert('Gagal memperbarui produk');
-      }
-    } else {
-      const insertPayload = {
-        ...basePayload,
-        stock: 0
-      };
-      
-      const { data, error } = await supabase
-        .from('products')
-        .insert([insertPayload])
-        .select('*, units(name), categories(name)')
-        .single();
-        
-      if (!error && data) {
-        if (formData.ingredients.length > 0) {
-          const ingPayload = formData.ingredients.map(ing => ({
-            product_id: data.id,
-            ingredient_id: ing.ingredient_id,
-            quantity: ing.quantity
-          }));
-          await supabase.from('product_ingredients').insert(ingPayload);
-        }
-        fetchProducts();
-        closeModal();
-      } else {
-        alert('Gagal menambahkan produk');
-      }
-    }
+    const result = await saveProduct({ id: editingProduct?.id ?? null, name: formData.name,
+      categoryId: formData.category_id || null, unitId: formData.unit_id || null,
+      price: Number(formData.price), ingredients: formData.ingredients });
+    if (result.success) { await fetchProducts(); closeModal(); }
+    else alert(result.error);
     setIsSubmitting(false);
   };
 

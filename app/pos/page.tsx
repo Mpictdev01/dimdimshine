@@ -2,31 +2,31 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
 import { usePosStore } from '@/lib/store/usePosStore';
 import ProductCard from '@/app/components/pos/ProductCard';
 import Cart from '@/app/components/pos/Cart';
-import CustomerModal from '@/app/components/pos/CustomerModal';
 import ReportModal from '@/app/components/pos/ReportModal';
 import ExpenseModal from '@/app/components/pos/ExpenseModal';
 import IngredientsStockModal from '@/app/components/pos/IngredientsStockModal';
 import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X, FileText, Wallet, Boxes, Menu } from 'lucide-react';
 import clsx from 'clsx';
+import { closeShift, shiftSummary } from '@/app/actions/shift';
+import { logoutAccount } from '@/app/actions/auth';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function PosPage() {
   const router = useRouter();
-  const { currentShift, endShift, orderType, activeCustomer, setOrderType, cart } = usePosStore();
+  const { currentShift, endShift, cart } = usePosStore();
   
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>(['Semua']);
   const [activeCategory, setActiveCategory] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reload, setReload] = useState(0);
   const [showMobileCart, setShowMobileCart] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -43,6 +43,7 @@ export default function PosPage() {
     }
 
     const fetchProducts = async () => {
+      setIsLoading(true); setLoadError('');
       try {
         const [prodRes, catRes, ingRes] = await Promise.all([
           supabase.from('products').select('*, categories(name), units(name), product_ingredients(ingredient_id, quantity)'),
@@ -96,7 +97,7 @@ export default function PosPage() {
           setCategories(['Semua', ...allCategories]);
         }
       } catch (err) {
-        console.error('Failed to fetch products:', err);
+        setLoadError('Produk gagal dimuat. Periksa koneksi lalu coba lagi.');
       } finally {
         setIsLoading(false);
       }
@@ -104,24 +105,7 @@ export default function PosPage() {
 
     fetchProducts();
 
-    // Berlangganan (Subscribe) ke perubahan realtime di tabel products
-    const channel = supabase
-      .channel('realtime:products')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'products' },
-        (payload) => {
-          console.log('Perubahan produk terdeteksi!', payload);
-          // Ambil ulang produk jika ada perubahan (Tambah/Ubah/Hapus) di Backoffice
-          fetchProducts();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentShift, router]);
+  }, [currentShift, router, reload]);
 
   const cartItemsCount = cart.reduce((total, item) => total + item.quantity, 0);
   const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
@@ -148,9 +132,20 @@ export default function PosPage() {
 
   if (!currentShift) return null; // Akan dialihkan ke /pos/shift
 
-  const handleLogout = () => {
-    endShift();
-    router.push('/pos/shift');
+  const handleLogout = async () => {
+    try {
+      const summary = await shiftSummary(currentShift.id);
+      const answer = window.prompt(`Kas awal: ${formatPrice(Number(summary.shift.starting_cash))}\nPenjualan tunai: ${formatPrice(summary.cashSales)}\nQRIS: ${formatPrice(summary.qrisSales)} (tidak masuk kas)\nPengeluaran: ${formatPrice(summary.expenseTotal)}\nKas seharusnya: ${formatPrice(summary.expectedCash)}\n\nMasukkan kas tunai fisik saat tutup shift:`);
+      if (answer === null) return;
+      const physicalCash = Number(answer);
+      if (!Number.isFinite(physicalCash) || physicalCash < 0 || answer.trim() === '') { alert('Kas fisik tidak valid.'); return; }
+      const result = await closeShift(currentShift.id, physicalCash);
+      if (!result.success) { alert(result.error); return; }
+      alert(`Shift ditutup. Selisih kas: ${formatPrice(Number(result.shift.cash_difference))}`);
+      await logoutAccount();
+      endShift();
+      router.replace('/pos/shift');
+    } catch (error) { alert(error instanceof Error ? error.message : 'Gagal menutup shift'); }
   };
 
   const filteredProducts = products.filter(p => {
@@ -174,7 +169,8 @@ export default function PosPage() {
               </div>
               <input
                 type="text"
-                placeholder="Cari produk (nama / kode)..."
+                placeholder="Cari nama produk..."
+                aria-label="Cari nama produk"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="block w-full pl-10 pr-3 py-2.5 sm:py-3 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm text-sm"
@@ -254,6 +250,10 @@ export default function PosPage() {
             <div className="h-full flex items-center justify-center text-slate-400">
               <Loader2 className="animate-spin" size={32} />
             </div>
+          ) : loadError ? (
+            <div role="alert" className="h-full flex flex-col items-center justify-center gap-3 text-red-700">
+              <p>{loadError}</p><button onClick={() => setReload(value => value + 1)} className="rounded-lg bg-blue-600 px-4 py-2 text-white">Coba lagi</button>
+            </div>
           ) : filteredProducts.length > 0 ? (
             <div className="flex flex-col gap-2">
               {filteredProducts.map(product => (
@@ -263,7 +263,7 @@ export default function PosPage() {
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-slate-400">
               <Search size={48} className="mb-4 opacity-30" />
-              <p>Tidak ada produk yang cocok dengan pencarian.</p>
+              <p>{products.length ? 'Tidak ada produk yang cocok dengan pencarian.' : 'Belum ada produk.'}</p>
             </div>
           )}
         </div>

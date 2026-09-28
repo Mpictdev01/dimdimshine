@@ -1,15 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { browserDataClient } from '@/lib/browser-data-client';
+import { localDateStart, localDateEnd, localDateInput } from '@/lib/local-date';
 import { Loader2, Search, Download, Filter, FileSpreadsheet, Trash2, X, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { deleteTransactions } from '@/app/actions/transaction';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = browserDataClient;
 
 export default function RecapReportPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -64,6 +62,7 @@ export default function RecapReportPage() {
           products(name, units(name))
         )
       `)
+      .neq('payment_status', 'void')
       .order('created_at', { ascending: false });
 
     if (!error && data) {
@@ -76,14 +75,12 @@ export default function RecapReportPage() {
     let filtered = [...transactions];
 
     if (startDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
+      const start = localDateStart(startDate);
       filtered = filtered.filter(tx => new Date(tx.created_at) >= start);
     }
     
     if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
+      const end = localDateEnd(endDate);
       filtered = filtered.filter(tx => new Date(tx.created_at) <= end);
     }
 
@@ -149,7 +146,7 @@ export default function RecapReportPage() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Penjualan");
     
-    XLSX.writeFile(workbook, `Rekap_Penjualan_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(workbook, `Rekap_Penjualan_${localDateInput()}.xlsx`);
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {

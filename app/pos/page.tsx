@@ -413,7 +413,7 @@ export default function PosPage() {
               <div className="p-2 bg-blue-600 text-white rounded-lg shadow-sm">
                 <FileText size={18} />
               </div>
-              <span>Laporan Harian Kasir</span>
+              <span>Laporan Shift Kasir</span>
             </button>
           </div>
 

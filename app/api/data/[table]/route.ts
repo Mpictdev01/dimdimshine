@@ -79,9 +79,20 @@ async function handle(request: NextRequest, context: { params: Promise<{ table: 
     }
     params.set('select', actor.role === 'cashier' ? cashierColumns[table] : adminColumns[table]);
     if (actor.role === 'cashier' && ['shifts','transactions','expenses'].includes(table)) {
-      const shiftIds = table === 'shifts' ? '' : await ownShiftIds(actor.userId);
-      params.set(table === 'shifts' ? 'cashier_id' : 'shift_id',
-        table === 'shifts' ? `eq.${actor.userId}` : shiftIds ? `in.(${shiftIds})` : 'eq.00000000-0000-0000-0000-000000000000');
+      if (table === 'shifts') {
+        params.set('cashier_id', `eq.${actor.userId}`);
+      } else {
+        const requestedShift = params.get('shift_id');
+        if (requestedShift) {
+          const shiftId = /^eq\.([0-9a-f-]{36})$/.exec(requestedShift)?.[1];
+          if (!shiftId || !(await ownsShift(actor.userId, shiftId)))
+            return NextResponse.json({ message: 'Shift tidak diizinkan' }, { status: 403 });
+          params.set('shift_id', `eq.${shiftId}`);
+        } else {
+          const shiftIds = await ownShiftIds(actor.userId);
+          params.set('shift_id', shiftIds ? `in.(${shiftIds})` : 'eq.00000000-0000-0000-0000-000000000000');
+        }
+      }
     }
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SECRET_KEY;
@@ -114,6 +125,14 @@ async function ownShiftIds(userId: string) {
   const { data, error } = await db().from('shifts').select('id').eq('cashier_id', userId);
   if (error) throw error;
   return (data ?? []).map(row => row.id).join(',');
+}
+
+async function ownsShift(userId: string, shiftId: string) {
+  const { db } = await import('@/lib/server/db');
+  const { data, error } = await db().from('shifts').select('id')
+    .eq('id', shiftId).eq('cashier_id', userId).maybeSingle();
+  if (error) throw error;
+  return !!data;
 }
 
 export const GET = handle;

@@ -4,12 +4,22 @@ import { useEffect, useState } from 'react';
 import { browserDataClient } from '@/lib/browser-data-client';
 import { X, Loader2, Send, TrendingUp, Banknote, QrCode, Package, CalendarDays, FileText, Wallet, TrendingDown } from 'lucide-react';
 import { usePosStore } from '@/lib/store/usePosStore';
+import { shiftSummary } from '@/app/actions/shift';
 
 const supabase = browserDataClient;
 
 interface ReportModalProps {
   onClose: () => void;
 }
+
+type IngredientStock = {
+  id: string;
+  name: string;
+  current_stock: number;
+  unit: string;
+  yield_quantity: number | null;
+  yield_unit: string | null;
+};
 
 export default function ReportModal({ onClose }: ReportModalProps) {
   const currentShift = usePosStore(state => state.currentShift);
@@ -24,7 +34,7 @@ export default function ReportModal({ onClose }: ReportModalProps) {
     totalExpenses: 0
   });
   
-  const [ingredients, setIngredients] = useState<any[]>([]);
+  const [ingredients, setIngredients] = useState<IngredientStock[]>([]);
   const [waTemplate, setWaTemplate] = useState('');
   const [deskripsi, setDeskripsi] = useState('');
 
@@ -33,40 +43,14 @@ export default function ReportModal({ onClose }: ReportModalProps) {
       setIsLoading(true); setLoadError('');
       try {
         if (!currentShift) throw new Error('Shift aktif tidak ditemukan');
-        // Data laporan kasir selalu dibatasi ke shift aktif.
-        const { data: txData, error: txError } = await supabase
-          .from('transactions')
-          .select('total, payment_method')
-          .eq('shift_id', currentShift.id).eq('payment_status', 'paid');
-          
-        let omzet = 0;
-        let cash = 0;
-        let qris = 0;
-        
-        if (txError) throw txError;
-        if (txData) {
-          txData.forEach(tx => {
-            omzet += (tx.total || 0);
-            if (tx.payment_method === 'cash') cash += (tx.total || 0);
-            if (tx.payment_method === 'qris') qris += (tx.total || 0);
-          });
-        }
-        
-        setReportData({ totalOmzet: omzet, totalCash: cash, totalQris: qris, totalExpenses: 0 });
-        
-        // Fetch Expenses for today
-        const { data: expData, error: expError } = await supabase
-          .from('expenses')
-          .select('amount')
-          .eq('shift_id', currentShift.id);
-          
-        let totalExp = 0;
-        if (expError) throw expError;
-        if (expData) {
-          totalExp = expData.reduce((sum, e) => sum + (e.amount || 0), 0);
-        }
-        
-        setReportData({ totalOmzet: omzet, totalCash: cash, totalQris: qris, totalExpenses: totalExp });
+        const summary = await shiftSummary(currentShift.id);
+        const omzet = summary.transactions.reduce((sum, tx) => sum + Number(tx.total), 0);
+        setReportData({
+          totalOmzet: omzet,
+          totalCash: summary.cashSales,
+          totalQris: summary.qrisSales,
+          totalExpenses: summary.expenseTotal,
+        });
         
         // Fetch Ingredients Stock
         const { data: ingData, error: ingError } = await supabase

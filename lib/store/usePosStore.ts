@@ -16,7 +16,6 @@ export interface ShiftInfo {
   cashierId: string;
   cashierName: string;
   startTime: string;
-  startingCash: number;
 }
 
 interface PosState {

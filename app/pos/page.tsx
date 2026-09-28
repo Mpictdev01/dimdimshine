@@ -11,14 +11,14 @@ import ExpenseModal from '@/app/components/pos/ExpenseModal';
 import IngredientsStockModal from '@/app/components/pos/IngredientsStockModal';
 import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X, FileText, Wallet, Boxes, Menu } from 'lucide-react';
 import clsx from 'clsx';
-import { closeShift, shiftSummary } from '@/app/actions/shift';
+import { closeShift } from '@/app/actions/shift';
 import { logoutAccount } from '@/app/actions/auth';
 
 const supabase = browserDataClient;
 
 export default function PosPage() {
   const router = useRouter();
-  const { currentShift, endShift, cart } = usePosStore();
+  const { currentShift, endShift, clearCart, cart } = usePosStore();
   
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>(['Semua']);
@@ -33,7 +33,9 @@ export default function PosPage() {
   const [showIngredientsModal, setShowIngredientsModal] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [animateCart, setAnimateCart] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const isFirstRender = useRef(true);
+  const closingRef = useRef(false);
 
   useEffect(() => {
     // Jika tidak ada shift aktif, paksa ke halaman buka shift
@@ -133,19 +135,25 @@ export default function PosPage() {
   if (!currentShift) return null; // Akan dialihkan ke /pos/shift
 
   const handleLogout = async () => {
+    if (closingRef.current || !window.confirm('Tutup shift dan keluar?')) return;
+    closingRef.current = true;
+    setIsClosing(true);
     try {
-      const summary = await shiftSummary(currentShift.id);
-      const answer = window.prompt(`Kas awal: ${formatPrice(Number(summary.shift.starting_cash))}\nPenjualan tunai: ${formatPrice(summary.cashSales)}\nQRIS: ${formatPrice(summary.qrisSales)} (tidak masuk kas)\nPengeluaran: ${formatPrice(summary.expenseTotal)}\nKas seharusnya: ${formatPrice(summary.expectedCash)}\n\nMasukkan kas tunai fisik saat tutup shift:`);
-      if (answer === null) return;
-      const physicalCash = Number(answer);
-      if (!Number.isFinite(physicalCash) || physicalCash < 0 || answer.trim() === '') { alert('Kas fisik tidak valid.'); return; }
-      const result = await closeShift(currentShift.id, physicalCash);
+      const result = await closeShift(currentShift.id);
       if (!result.success) { alert(result.error); return; }
-      alert(`Shift ditutup. Selisih kas: ${formatPrice(Number(result.shift.cash_difference))}`);
-      await logoutAccount();
       endShift();
+      clearCart();
+      try {
+        await logoutAccount();
+      } catch {
+        alert('Shift sudah ditutup, tetapi sesi belum berhasil keluar. Gunakan "Ganti akun" pada halaman berikutnya.');
+      }
       router.replace('/pos/shift');
     } catch (error) { alert(error instanceof Error ? error.message : 'Gagal menutup shift'); }
+    finally {
+      closingRef.current = false;
+      setIsClosing(false);
+    }
   };
 
   const filteredProducts = products.filter(p => {
@@ -218,6 +226,7 @@ export default function PosPage() {
               </button>
               <button 
                 onClick={handleLogout}
+                disabled={isClosing}
                 className="flex items-center justify-center gap-2 px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs sm:text-sm rounded-xl transition-all border border-red-200/60 shadow-xs whitespace-nowrap active:scale-95"
               >
                 <LogOut size={16} className="shrink-0 text-red-600" />
@@ -382,9 +391,9 @@ export default function PosPage() {
                 setShowIngredientsModal(true);
                 setShowMobileNav(false);
               }}
-              className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-800 font-semibold text-sm transition-all border border-emerald-100 active:scale-[0.98]"
+              className="clay-action-card w-full flex items-center gap-3 p-3.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]"
             >
-              <div className="p-2 bg-emerald-500 text-white rounded-lg shadow-sm">
+              <div className="p-2 bg-emerald-700 text-white rounded-lg shadow-sm">
                 <Boxes size={18} />
               </div>
               <span>Stok Bahan Baku</span>
@@ -395,9 +404,9 @@ export default function PosPage() {
                 setShowExpenseModal(true);
                 setShowMobileNav(false);
               }}
-              className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-amber-50/70 hover:bg-amber-100/80 text-amber-800 font-semibold text-sm transition-all border border-amber-100 active:scale-[0.98]"
+              className="clay-action-card w-full flex items-center gap-3 p-3.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]"
             >
-              <div className="p-2 bg-amber-500 text-white rounded-lg shadow-sm">
+              <div className="p-2 bg-amber-700 text-white rounded-lg shadow-sm">
                 <Wallet size={18} />
               </div>
               <span>Catat Pengeluaran</span>
@@ -408,7 +417,7 @@ export default function PosPage() {
                 setShowReportModal(true);
                 setShowMobileNav(false);
               }}
-              className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-blue-50/70 hover:bg-blue-100/80 text-blue-800 font-semibold text-sm transition-all border border-blue-100 active:scale-[0.98]"
+              className="clay-action-card w-full flex items-center gap-3 p-3.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]"
             >
               <div className="p-2 bg-blue-600 text-white rounded-lg shadow-sm">
                 <FileText size={18} />
@@ -423,6 +432,7 @@ export default function PosPage() {
                 setShowMobileNav(false);
                 handleLogout();
               }}
+              disabled={isClosing}
               className="w-full flex items-center justify-center gap-2 p-3.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm transition-all border border-red-100 active:scale-[0.98]"
             >
               <LogOut size={18} />

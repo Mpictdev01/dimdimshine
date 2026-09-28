@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { browserDataClient } from '@/lib/browser-data-client';
+import { saveMaster, deleteMaster } from '@/app/actions/master-data';
 import { Plus, Trash2, Loader2, X, Save, Edit2, Search } from 'lucide-react';
 
 const supabase = browserDataClient;
@@ -10,6 +11,7 @@ export default function AdminCustomers() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [areas, setAreas] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterArea, setFilterArea] = useState('all');
 
@@ -24,26 +26,26 @@ export default function AdminCustomers() {
 
   const fetchData = async () => {
     setIsLoading(true);
+    setLoadError('');
     const [custRes, areaRes] = await Promise.all([
       supabase.from('customers').select('*, customer_areas(name)').order('name'),
       supabase.from('customer_areas').select('*').order('name')
     ]);
     
-    if (custRes.data) setCustomers(custRes.data);
-    if (areaRes.data) setAreas(areaRes.data);
+    if (custRes.error || areaRes.error) setLoadError(custRes.error?.message || areaRes.error?.message || 'Gagal memuat data');
+    else {
+      setCustomers(custRes.data ?? []);
+      setAreas(areaRes.data ?? []);
+    }
     
     setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus pelanggan (toko) ini? Semua riwayat piutangnya mungkin akan bermasalah.')) return;
-    
-    const { error } = await supabase.from('customers').delete().eq('id', id);
-    if (!error) {
-      setCustomers(customers.filter(c => c.id !== id));
-    } else {
-      alert('Gagal menghapus pelanggan. Error: ' + error.message);
-    }
+    if (!confirm('Hapus pelanggan ini? Data yang masih digunakan tidak dapat dihapus.')) return;
+    const result = await deleteMaster('customers', id);
+    if (result.success) await fetchData();
+    else alert(result.error);
   };
 
   const openModal = (customer?: any) => {
@@ -70,43 +72,16 @@ export default function AdminCustomers() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    const payload = { 
-      name: formData.name,
-      phone: formData.phone || null,
-      address: formData.address || null,
-      area_id: formData.area_id || null
-    };
-
-    if (editingCustomer) {
-      const { data, error } = await supabase
-        .from('customers')
-        .update(payload)
-        .eq('id', editingCustomer.id)
-        .select('*, customer_areas(name)')
-        .single();
-        
-      if (!error && data) {
-        setCustomers(customers.map(c => c.id === data.id ? data : c));
-        closeModal();
-      } else {
-        alert('Gagal memperbarui pelanggan: ' + error?.message);
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('customers')
-        .insert([payload])
-        .select('*, customer_areas(name)')
-        .single();
-        
-      if (!error && data) {
-        setCustomers([...customers, data]);
-        closeModal();
-      } else {
-        alert('Gagal menambahkan pelanggan: ' + error?.message);
-      }
+    try {
+      const result = await saveMaster('customers', editingCustomer?.id ?? null, { name: formData.name, phone: formData.phone, address: formData.address, area_id: formData.area_id || null });
+      if (!result.success) throw new Error(result.error);
+      closeModal();
+      await fetchData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Gagal menyimpan pelanggan');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const filteredCustomers = customers.filter(c => {
@@ -117,6 +92,7 @@ export default function AdminCustomers() {
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col">
+      {loadError && <div role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-red-700">Gagal memuat data: {loadError} <button type="button" onClick={fetchData} className="underline">Coba lagi</button></div>}
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-800">Daftar Toko Pelanggan</h1>

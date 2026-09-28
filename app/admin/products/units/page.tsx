@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { browserDataClient } from '@/lib/browser-data-client';
+import { saveMaster, deleteMaster } from '@/app/actions/master-data';
 import { Plus, Trash2, Loader2, X, Save, Edit2 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -10,6 +11,7 @@ const supabase = browserDataClient;
 export default function AdminUnits() {
   const [units, setUnits] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,22 +25,20 @@ export default function AdminUnits() {
 
   const fetchUnits = async () => {
     setIsLoading(true);
+    setLoadError('');
     const { data, error } = await supabase.from('units').select('*').order('name');
     if (!error && data) {
       setUnits(data);
     }
+    if (error) setLoadError(error.message);
     setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus satuan ini? Ini bisa berdampak pada produk yang menggunakannya.')) return;
-    
-    const { error } = await supabase.from('units').delete().eq('id', id);
-    if (!error) {
-      setUnits(units.filter(u => u.id !== id));
-    } else {
-      alert('Gagal menghapus satuan, mungkin sedang digunakan oleh produk.');
-    }
+    if (!confirm('Hapus satuan ini? Data yang masih digunakan tidak dapat dihapus.')) return;
+    const result = await deleteMaster('units', id);
+    if (result.success) await fetchUnits();
+    else alert(result.error);
   };
 
   const openModal = (unit?: any) => {
@@ -60,42 +60,21 @@ export default function AdminUnits() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    const payload = { name: formData.name };
-
-    if (editingUnit) {
-      const { data, error } = await supabase
-        .from('units')
-        .update(payload)
-        .eq('id', editingUnit.id)
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setUnits(units.map(u => u.id === data.id ? data : u));
-        closeModal();
-      } else {
-        alert('Gagal memperbarui satuan.');
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('units')
-        .insert([payload])
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setUnits([...units, data]);
-        closeModal();
-      } else {
-        alert('Gagal menambahkan satuan.');
-      }
+    try {
+      const result = await saveMaster('units', editingUnit?.id ?? null, formData);
+      if (!result.success) throw new Error(result.error);
+      closeModal();
+      await fetchUnits();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Gagal menyimpan satuan');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col">
+      {loadError && <div role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-red-700">Gagal memuat data: {loadError} <button type="button" onClick={fetchUnits} className="underline">Coba lagi</button></div>}
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-800">Master Data Satuan</h1>

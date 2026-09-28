@@ -53,6 +53,12 @@ export async function processTransaction(payload: {
 export async function deleteTransaction(txId: string, shouldRestoreStock = true) {
   try {
     const actor = await requireRole(['manager','super_admin']);
+    if (!/^[0-9a-f-]{36}$/i.test(txId)) throw new Error('ID transaksi tidak valid');
+    const { data: transaction, error: lookupError } = await db().from('transactions')
+      .select('shift_id,shifts(status)').eq('id', txId).single();
+    if (lookupError) throw lookupError;
+    const shift = Array.isArray(transaction.shifts) ? transaction.shifts[0] : transaction.shifts;
+    if (shift?.status !== 'open') throw new Error('Shift sudah ditutup. Pembatalan transaksi ini perlu pemeriksaan manual.');
     const { error } = await db().rpc('pos_void_sale', { p_tx_id: txId, p_actor_id: actor.userId, p_restore_stock: shouldRestoreStock });
     if (error) throw error;
     return { success: true as const };
@@ -63,14 +69,18 @@ export async function deleteTransaction(txId: string, shouldRestoreStock = true)
 
 export async function deleteTransactions(txIds: string[], shouldRestoreStock = true) {
   try {
-    const actor = await requireRole(['manager','super_admin']);
-    if (!Array.isArray(txIds) || txIds.length > 100) throw new Error('Daftar transaksi tidak valid');
+    await requireRole(['manager','super_admin']);
+    if (!Array.isArray(txIds) || txIds.length < 1 || txIds.length > 100 ||
+      txIds.some(id => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) ||
+      new Set(txIds).size !== txIds.length) throw new Error('Daftar transaksi tidak valid');
+    let completed = 0;
     for (const txId of txIds) {
-      const { error } = await db().rpc('pos_void_sale', { p_tx_id: txId, p_actor_id: actor.userId, p_restore_stock: shouldRestoreStock });
-      if (error) throw error;
+      const result = await deleteTransaction(txId, shouldRestoreStock);
+      if (!result.success) return { success: false as const, completed, error: result.error };
+      completed++;
     }
-    return { success: true as const };
+    return { success: true as const, completed };
   } catch (error) {
-    return { success: false as const, error: error instanceof Error ? error.message : 'Gagal membatalkan transaksi' };
+    return { success: false as const, completed: 0, error: error instanceof Error ? error.message : 'Gagal membatalkan transaksi' };
   }
 }

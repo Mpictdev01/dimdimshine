@@ -2,8 +2,12 @@
 
 import { changeOwnPin, session, signIn, signOut, staffAccounts } from '@/lib/server/session';
 
-export async function listStaffAccounts() {
-  return staffAccounts();
+export async function listCashierAccounts() {
+  return staffAccounts(['cashier']);
+}
+
+export async function listAdminAccounts() {
+  return staffAccounts(['manager', 'super_admin']);
 }
 
 export async function loginAccount(userId: string, pin: string) {

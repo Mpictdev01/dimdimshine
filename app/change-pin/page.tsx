@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateOwnPin } from '@/app/actions/auth';
+import Image from 'next/image';
 
 export default function ChangePinPage() {
   const router = useRouter();
@@ -17,9 +18,10 @@ export default function ChangePinPage() {
     if (result.success) router.replace('/pos/shift');
     else setError(result.error);
   }
-  return <main className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-    <form onSubmit={submit} className="w-full max-w-sm rounded-2xl bg-white p-6 shadow space-y-4">
-      <h1 className="text-xl font-bold">Ganti PIN</h1>
+  return <main className="clay-shell min-h-screen flex items-center justify-center bg-slate-50 p-4">
+    <form onSubmit={submit} className="clay-surface w-full max-w-sm rounded-3xl bg-white p-7 space-y-4">
+      <Image src="/poslogo.png" alt="Logo DIMDIM SHINE" width={72} height={72} className="clay-logo mx-auto h-[72px] w-[72px] object-cover" priority />
+      <h1 className="text-xl font-bold text-center">Ganti PIN</h1>
       <p className="text-sm text-slate-600">PIN baru harus 6–8 digit. Setelah diganti, silakan masuk kembali.</p>
       <label htmlFor="new-pin" className="block text-sm font-medium">PIN baru</label>
       <input id="new-pin" type="password" inputMode="numeric" autoComplete="new-password" pattern="[0-9]{6,8}" minLength={6} maxLength={8}

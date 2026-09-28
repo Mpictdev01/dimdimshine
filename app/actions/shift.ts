@@ -5,18 +5,17 @@ import { requireRole } from '@/lib/server/session';
 
 export async function activeShift() {
   const actor = await requireRole(['cashier','manager','super_admin']);
-  const { data, error } = await db().from('shifts').select('id, cashier_id, start_time, starting_cash, status')
+  const { data, error } = await db().from('shifts').select('id, cashier_id, start_time, status')
     .eq('cashier_id', actor.userId).eq('status', 'open').order('start_time', { ascending: false }).limit(1).maybeSingle();
   if (error) throw error;
   return data ? { id: data.id, cashierId: actor.userId, cashierName: actor.fullName,
-    startTime: data.start_time, startingCash: Number(data.starting_cash) } : null;
+    startTime: data.start_time } : null;
 }
 
-export async function openShift(startingCash: number) {
+export async function openShift() {
   try {
     const actor = await requireRole(['cashier','manager','super_admin']);
-    if (!Number.isFinite(startingCash) || startingCash < 0) throw new Error('Kas awal tidak valid');
-    const { data, error } = await db().rpc('pos_open_shift', { p_user_id: actor.userId, p_starting_cash: startingCash });
+    const { data, error } = await db().rpc('pos_open_shift', { p_user_id: actor.userId, p_starting_cash: 0 });
     if (error) throw error;
     return { success: true as const, shift: data, user: actor };
   } catch (error) {
@@ -26,7 +25,7 @@ export async function openShift(startingCash: number) {
 
 export async function shiftSummary(shiftId: string) {
   const actor = await requireRole(['cashier','manager','super_admin']);
-  const { data: shift, error } = await db().from('shifts').select('id, cashier_id, starting_cash, status, start_time')
+  const { data: shift, error } = await db().from('shifts').select('id, cashier_id, status, start_time')
     .eq('id', shiftId).single();
   if (error || !shift || (actor.role === 'cashier' && shift.cashier_id !== actor.userId)) throw new Error('Shift tidak ditemukan');
   const [tx, exp] = await Promise.all([
@@ -38,16 +37,23 @@ export async function shiftSummary(shiftId: string) {
   const qrisSales = (tx.data ?? []).filter(row => row.payment_method === 'qris').reduce((sum,row) => sum + Number(row.total), 0);
   const expenses = (exp.data ?? []).reduce((sum,row) => sum + Number(row.amount), 0);
   return { shift, transactions: tx.data ?? [], expenses: exp.data ?? [], cashSales, qrisSales,
-    expenseTotal: expenses, expectedCash: Number(shift.starting_cash) + cashSales - expenses };
+    expenseTotal: expenses };
 }
 
-export async function closeShift(shiftId: string, endingCash: number) {
+export async function closeShift(shiftId: string) {
   try {
     const actor = await requireRole(['cashier','manager','super_admin']);
-    if (!Number.isFinite(endingCash) || endingCash < 0) throw new Error('Kas fisik tidak valid');
-    const { data, error } = await db().rpc('pos_close_shift', {
-      p_user_id: actor.userId, p_shift_id: shiftId, p_physical_cash: endingCash,
-    });
+    if (!/^[0-9a-f-]{36}$/i.test(shiftId)) throw new Error('ID shift tidak valid');
+    const closedAt = new Date().toISOString();
+    const { data, error } = await db().from('shifts').update({
+      status: 'closed',
+      end_time: closedAt,
+      ending_cash: null,
+      expected_cash: null,
+      cash_difference: null,
+      updated_at: closedAt,
+    }).eq('id', shiftId).eq('cashier_id', actor.userId).eq('status', 'open').select('id,status,end_time').single();
+    if (error?.code === 'PGRST116') throw new Error('Shift aktif tidak ditemukan atau sudah ditutup.');
     if (error) throw error;
     return { success: true as const, shift: data };
   } catch (error) {

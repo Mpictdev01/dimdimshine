@@ -2,13 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { browserDataClient } from '@/lib/browser-data-client';
-import { Plus, Trash2, Key, Loader2, ShieldCheck, User, X, Save } from 'lucide-react';
+import { Plus, Trash2, Key, Loader2, ShieldCheck, User, X, Save, UserRoundCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { currentSession } from '@/app/actions/auth';
-import { deactivateEmployee, saveEmployee } from '@/app/actions/employees';
-
-const supabase = browserDataClient;
+import { activateEmployee, deactivateEmployee, listEmployees, saveEmployee } from '@/app/actions/employees';
 
 export default function AdminEmployees() {
   const router = useRouter();
@@ -30,10 +27,9 @@ export default function AdminEmployees() {
 
   const fetchEmployees = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase.from('users').select('id,full_name,role').order('role');
-    if (!error && data) {
-      setEmployees(data);
-    }
+    const result = await listEmployees();
+    if (result.success) setEmployees(result.employees);
+    else alert(result.error);
     setIsLoading(false);
   };
 
@@ -42,14 +38,21 @@ export default function AdminEmployees() {
       alert('Tidak dapat menghapus akun Super Admin.');
       return;
     }
-    if (!confirm('Apakah Anda yakin ingin menghapus karyawan ini? Data riwayat shift tidak akan terhapus namun akan menjadi "Unknown User".')) return;
+    if (!confirm('Nonaktifkan akun pegawai ini? Riwayat transaksi dan shift tetap tersimpan.')) return;
     
     const result = await deactivateEmployee(id);
     if (result.success) {
-      setEmployees(employees.filter(emp => emp.id !== id));
+      await fetchEmployees();
     } else {
       alert(result.error);
     }
+  };
+
+  const handleActivate = async (id: string) => {
+    if (!confirm('Aktifkan kembali akun ini? Atur ulang PIN terlebih dahulu jika belum tersedia.')) return;
+    const result = await activateEmployee(id);
+    if (result.success) await fetchEmployees();
+    else alert(result.error);
   };
 
   const openModal = (emp?: any) => {
@@ -121,6 +124,7 @@ export default function AdminEmployees() {
                 <tr className="text-slate-500 text-sm border-b border-slate-200">
                   <th className="font-medium p-4 pl-6">Nama Lengkap</th>
                   <th className="font-medium p-4">Role Akses</th>
+                  <th className="font-medium p-4">Status</th>
                   <th className="font-medium p-4">PIN</th>
                   <th className="font-medium p-4 text-right pr-6">Aksi</th>
                 </tr>
@@ -134,6 +138,7 @@ export default function AdminEmployees() {
                     <td className="p-4">
                       {getRoleBadge(emp.role)}
                     </td>
+                    <td className="p-4">{emp.is_active ? 'Aktif' : 'Nonaktif'}</td>
                     <td className="p-4">
                       <div className="flex items-center gap-2 text-slate-400 font-mono text-sm">
                         <Key size={14} />
@@ -147,7 +152,12 @@ export default function AdminEmployees() {
                       </div>
                     </td>
                     <td className="p-4 pr-6 text-right">
-                      {emp.role !== 'super_admin' && (
+                      {!emp.is_active ? (
+                        <button onClick={() => handleActivate(emp.id)} title="Aktifkan akun"
+                          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg">
+                          <UserRoundCheck size={18} />
+                        </button>
+                      ) : emp.role !== 'super_admin' && (
                         <button 
                           onClick={() => handleDelete(emp.id, emp.role)}
                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"

@@ -13,6 +13,7 @@ export default function RecapReportPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [filteredTx, setFilteredTx] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   
   const [users, setUsers] = useState<any[]>([]);
 
@@ -52,21 +53,31 @@ export default function RecapReportPage() {
 
   const fetchTransactions = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('transactions')
-      .select(`
-        *,
-        customers(name),
-        transaction_items(
-          product_id, quantity, price,
-          products(name, units(name))
-        )
-      `)
-      .neq('payment_status', 'void')
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setTransactions(data);
+    setLoadError('');
+    const all: any[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          customers(name),
+          transaction_items(
+            product_id, quantity, price,
+            products(name, units(name))
+          )
+        `)
+        .neq('payment_status', 'void')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + 499);
+      if (error) {
+        setLoadError(error.message);
+        break;
+      }
+      all.push(...(data ?? []));
+      if (!data || data.length < 500) {
+        setTransactions(all);
+        break;
+      }
     }
     setIsLoading(false);
   };
@@ -173,7 +184,10 @@ export default function RecapReportPage() {
       setShowDeleteModal(false);
       await fetchTransactions(); // Refresh data
     } else {
-      alert(`Error: ${res.error}`);
+      alert(`${res.completed} transaksi berhasil dibatalkan sebelum proses berhenti. ${res.error}`);
+      setSelectedIds([]);
+      setShowDeleteModal(false);
+      await fetchTransactions();
     }
 
     setIsDeleting(false);
@@ -181,6 +195,7 @@ export default function RecapReportPage() {
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col">
+      {loadError && <div role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-red-700">Gagal memuat rekap: {loadError} <button type="button" onClick={fetchTransactions} className="underline">Coba lagi</button></div>}
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-6 shrink-0">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-800">Rekap Penjualan</h1>
@@ -383,9 +398,11 @@ export default function RecapReportPage() {
           </div>
           <button 
             onClick={() => setShowDeleteModal(true)}
-            className="flex items-center gap-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 px-3 py-1.5 rounded-lg transition-colors font-medium text-sm"
+            disabled={selectedIds.some(id => filteredTx.find(tx => tx.id === id)?.shifts?.status !== 'open')}
+            title="Pembatalan hanya tersedia saat shift masih terbuka"
+            className="flex items-center gap-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors font-medium text-sm"
           >
-            <Trash2 size={16} /> Hapus Terpilih
+            <Trash2 size={16} /> Batalkan Terpilih
           </button>
           <button 
             onClick={() => setSelectedIds([])}
@@ -404,9 +421,9 @@ export default function RecapReportPage() {
               <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
                 <AlertTriangle size={24} />
               </div>
-              <h2 className="text-xl font-bold text-slate-800 mb-2">Hapus {selectedIds.length} Transaksi?</h2>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">Batalkan {selectedIds.length} Transaksi?</h2>
               <p className="text-slate-500 text-sm mb-6">
-                Tindakan ini akan menghapus nota transaksi beserta seluruh riwayat penjualan di dalamnya.
+                Riwayat tetap tersimpan dengan status void. Proses batch dapat berhasil sebagian bila salah satu transaksi ditolak.
               </p>
 
               <label className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
@@ -439,7 +456,7 @@ export default function RecapReportPage() {
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50 text-sm shadow-sm"
               >
                 {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                Ya, Hapus Permanen
+                Ya, Batalkan
               </button>
             </div>
           </div>

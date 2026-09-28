@@ -15,9 +15,10 @@ export type Session = {
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
-export async function staffAccounts() {
+export async function staffAccounts(roles: Role[]) {
   if (process.env.MAINTENANCE_MODE === 'true') throw new Error('POS sedang dalam jeda operasional');
-  const { data, error } = await db().from('users').select('id, full_name').eq('is_active', true).order('full_name');
+  const { data, error } = await db().from('users').select('id, full_name')
+    .eq('is_active', true).in('role', roles).order('full_name');
   if (error) throw error;
   return data ?? [];
 }

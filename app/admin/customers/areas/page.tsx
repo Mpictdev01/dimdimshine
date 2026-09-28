@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { browserDataClient } from '@/lib/browser-data-client';
+import { saveMaster, deleteMaster } from '@/app/actions/master-data';
 import { Plus, Trash2, Loader2, X, Save, Edit2 } from 'lucide-react';
 
 const supabase = browserDataClient;
@@ -9,6 +10,7 @@ const supabase = browserDataClient;
 export default function AdminCustomerAreas() {
   const [areas, setAreas] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<any>(null);
@@ -21,22 +23,20 @@ export default function AdminCustomerAreas() {
 
   const fetchAreas = async () => {
     setIsLoading(true);
+    setLoadError('');
     const { data, error } = await supabase.from('customer_areas').select('*').order('name');
     if (!error && data) {
       setAreas(data);
     }
+    if (error) setLoadError(error.message);
     setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus Area/Rute ini?')) return;
-    
-    const { error } = await supabase.from('customer_areas').delete().eq('id', id);
-    if (!error) {
-      setAreas(areas.filter(a => a.id !== id));
-    } else {
-      alert('Gagal menghapus area. Pastikan tidak ada pelanggan yang menggunakan rute ini.');
-    }
+    if (!confirm('Hapus area ini? Data yang masih digunakan tidak dapat dihapus.')) return;
+    const result = await deleteMaster('customer_areas', id);
+    if (result.success) await fetchAreas();
+    else alert(result.error);
   };
 
   const openModal = (area?: any) => {
@@ -58,42 +58,21 @@ export default function AdminCustomerAreas() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    const payload = { name: formData.name };
-
-    if (editingArea) {
-      const { data, error } = await supabase
-        .from('customer_areas')
-        .update(payload)
-        .eq('id', editingArea.id)
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setAreas(areas.map(a => a.id === data.id ? data : a));
-        closeModal();
-      } else {
-        alert('Gagal memperbarui rute.');
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('customer_areas')
-        .insert([payload])
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setAreas([...areas, data]);
-        closeModal();
-      } else {
-        alert('Gagal menambahkan rute.');
-      }
+    try {
+      const result = await saveMaster('customer_areas', editingArea?.id ?? null, formData);
+      if (!result.success) throw new Error(result.error);
+      closeModal();
+      await fetchAreas();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Gagal menyimpan area');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col">
+      {loadError && <div role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-red-700">Gagal memuat data: {loadError} <button type="button" onClick={fetchAreas} className="underline">Coba lagi</button></div>}
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-800">Area / Rute Pelanggan</h1>

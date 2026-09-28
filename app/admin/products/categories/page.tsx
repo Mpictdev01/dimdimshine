@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { browserDataClient } from '@/lib/browser-data-client';
+import { saveMaster, deleteMaster } from '@/app/actions/master-data';
 import { Plus, Trash2, Loader2, X, Save, Edit2 } from 'lucide-react';
 
 const supabase = browserDataClient;
@@ -9,6 +10,7 @@ const supabase = browserDataClient;
 export default function AdminCategories() {
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
@@ -21,22 +23,20 @@ export default function AdminCategories() {
 
   const fetchCategories = async () => {
     setIsLoading(true);
+    setLoadError('');
     const { data, error } = await supabase.from('categories').select('*').order('name');
     if (!error && data) {
       setCategories(data);
     }
+    if (error) setLoadError(error.message);
     setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus kategori ini? (Gagal jika masih dipakai oleh produk)')) return;
-    
-    const { error } = await supabase.from('categories').delete().eq('id', id);
-    if (!error) {
-      setCategories(categories.filter(c => c.id !== id));
-    } else {
-      alert('Gagal menghapus kategori. Pastikan tidak ada produk yang menggunakan kategori ini.');
-    }
+    if (!confirm('Hapus kategori ini? Data yang masih digunakan tidak dapat dihapus.')) return;
+    const result = await deleteMaster('categories', id);
+    if (result.success) await fetchCategories();
+    else alert(result.error);
   };
 
   const openModal = (category?: any) => {
@@ -58,44 +58,21 @@ export default function AdminCategories() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    const payload = { name: formData.name };
-
-    if (editingCategory) {
-      const { data, error } = await supabase
-        .from('categories')
-        .update(payload)
-        .eq('id', editingCategory.id)
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setCategories(categories.map(c => c.id === data.id ? data : c));
-        closeModal();
-      } else {
-        alert('Gagal memperbarui kategori. Error: ' + (error?.message || 'Unknown'));
-        console.error(error);
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('categories')
-        .insert([payload])
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setCategories([...categories, data]);
-        closeModal();
-      } else {
-        alert('Gagal menambahkan kategori. Error: ' + (error?.message || 'Unknown'));
-        console.error(error);
-      }
+    try {
+      const result = await saveMaster('categories', editingCategory?.id ?? null, formData);
+      if (!result.success) throw new Error(result.error);
+      closeModal();
+      await fetchCategories();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Gagal menyimpan kategori');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col">
+      {loadError && <div role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-red-700">Gagal memuat data: {loadError} <button type="button" onClick={fetchCategories} className="underline">Coba lagi</button></div>}
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-800">Kategori Produk</h1>

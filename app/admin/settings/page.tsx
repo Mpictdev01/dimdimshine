@@ -1,17 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { browserDataClient } from '@/lib/browser-data-client';
+import { updateStoreSettings } from '@/app/actions/master-data';
 import { Save, Store, Receipt, Calculator, Loader2 } from 'lucide-react';
 
 const supabase = browserDataClient;
 
 export default function AdminSettings() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [formData, setFormData] = useState({
     store_name: '',
     address: '',
@@ -22,21 +22,23 @@ export default function AdminSettings() {
 
   useEffect(() => {
     fetchSettings();
-  }, [router]);
+  }, []);
 
   const fetchSettings = async () => {
     setIsLoading(true);
+    setLoadError('');
     const { data, error } = await supabase.from('store_settings').select('*').limit(1).single();
     if (!error && data) {
       setSettingsId(data.id);
       setFormData({
         store_name: data.store_name,
-        address: data.address,
-        tax_rate: data.tax_rate.toString(),
-        service_charge: data.service_charge.toString(),
+        address: data.address || '',
+        tax_rate: Number(data.tax_rate ?? 0).toString(),
+        service_charge: Number(data.service_charge ?? 0).toString(),
         wa_report_template: data.wa_report_template || ''
       });
     }
+    if (error || !data) setLoadError('Pengaturan toko tidak tersedia. Periksa data migrasi lalu muat ulang.');
     setIsLoading(false);
   };
 
@@ -44,36 +46,21 @@ export default function AdminSettings() {
     e.preventDefault();
     setIsSubmitting(true);
 
+    if (!settingsId) {
+      setLoadError('Pengaturan toko tidak tersedia. Periksa data migrasi lalu muat ulang.');
+      setIsSubmitting(false);
+      return;
+    }
     const payload = {
       store_name: formData.store_name,
       address: formData.address,
       tax_rate: parseFloat(formData.tax_rate),
       service_charge: parseFloat(formData.service_charge),
-      wa_report_template: formData.wa_report_template,
-      updated_at: new Date().toISOString()
+      wa_report_template: formData.wa_report_template
     };
-
-    if (settingsId) {
-      const { error } = await supabase
-        .from('store_settings')
-        .update(payload)
-        .eq('id', settingsId);
-      
-      if (error) alert('Gagal menyimpan pengaturan.\n\nDetail: ' + error.message);
-      else alert('Pengaturan berhasil disimpan!');
-    } else {
-      const { data, error } = await supabase
-        .from('store_settings')
-        .insert([payload])
-        .select()
-        .single();
-        
-      if (error) alert('Gagal menyimpan pengaturan.\n\nDetail: ' + error.message);
-      else {
-        setSettingsId(data.id);
-        alert('Pengaturan berhasil disimpan!');
-      }
-    }
+    const result = await updateStoreSettings(settingsId, payload);
+    if (result.success) alert('Pengaturan berhasil disimpan!');
+    else alert('Gagal menyimpan pengaturan: ' + result.error);
     
     setIsSubmitting(false);
   };
@@ -88,6 +75,7 @@ export default function AdminSettings() {
 
   return (
     <form onSubmit={handleSubmit} className="p-4 md:p-8 max-w-4xl h-full flex flex-col">
+      {loadError && <div role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-red-700">{loadError} <button type="button" onClick={fetchSettings} className="underline">Coba lagi</button></div>}
       <div className="mb-6 md:mb-8 shrink-0">
         <h1 className="text-xl md:text-2xl font-bold text-slate-800">Pengaturan Sistem</h1>
         <p className="text-slate-500 text-sm">Konfigurasi profil bisnis, pajak, dan cetakan struk.</p>
@@ -204,7 +192,7 @@ export default function AdminSettings() {
           </button>
           <button 
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !settingsId}
             className="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-md flex items-center gap-2"
           >
             {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}

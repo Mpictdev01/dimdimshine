@@ -12,11 +12,11 @@ const supabase = browserDataClient;
 export default function AdminDashboard() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   
   const [stats, setStats] = useState({
     salesTotal: 0,
     netProfitTotal: 0,
-    piutangTotal: 0,
     purchasesTotal: 0,
     cashTotal: 0,
     qrisTotal: 0,
@@ -28,7 +28,6 @@ export default function AdminDashboard() {
 
   // Master data for filters
   const [categories, setCategories] = useState<any[]>([]);
-  const [categoryProductIds, setCategoryProductIds] = useState<Set<string>>(new Set());
 
   // Filter Input States
   const today = new Date();
@@ -64,11 +63,12 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       setIsLoading(true);
+      setLoadError('');
       try {
         const start = localDateStart(activeFilters.startDate);
         const end = localDateEnd(activeFilters.endDate);
 
-        // 1. Fetch transactions (Sales, Profit, Piutang)
+        // 1. Fetch transactions (Sales, Profit)
         let txQuery = supabase
           .from('transactions')
           .select('total, subtotal, customer_id, payment_status, payment_method, transaction_items(product_id, quantity, price, cost_price)')
@@ -80,18 +80,19 @@ export default function AdminDashboard() {
           txQuery = txQuery.eq('payment_method', activeFilters.payment);
         }
         
-        const { data: salesData } = await txQuery;
+        const { data: salesData, error: salesError } = await txQuery;
+        if (salesError) throw salesError;
 
         let totalSales = 0;
         let totalNetProfit = 0;
-        let totalPiutangAmount = 0;
         let totalCash = 0;
         let totalQris = 0;
 
         // Fetch all products with category + unit for aggregation
-        const { data: allProducts } = await supabase
+        const { data: allProducts, error: productsError } = await supabase
           .from('products')
           .select('id, name, category_id, categories(name), units(name)');
+        if (productsError) throw productsError;
         const productMap = new Map<string, { productName: string; categoryName: string; unitName: string }>();
         if (allProducts) {
           for (const p of allProducts) {
@@ -110,7 +111,7 @@ export default function AdminDashboard() {
           let filteredSales = salesData;
           
           // JS filter for category if selected
-          if (activeFilters.category !== 'all' && activeFilters.categoryProductIds.size > 0) {
+          if (activeFilters.category !== 'all') {
             filteredSales = filteredSales.filter((tx: any) => 
               tx.transaction_items?.some((item: any) => activeFilters.categoryProductIds.has(item.product_id))
             );
@@ -119,9 +120,8 @@ export default function AdminDashboard() {
           for (const tx of filteredSales) {
             let txSales = 0;
             let txProfit = 0;
-            let txPiutang = 0;
 
-            if (activeFilters.category !== 'all' && activeFilters.categoryProductIds.size > 0) {
+            if (activeFilters.category !== 'all') {
               if (tx.transaction_items) {
                 for (const item of tx.transaction_items) {
                   if (activeFilters.categoryProductIds.has(item.product_id)) {
@@ -133,14 +133,8 @@ export default function AdminDashboard() {
                   }
                 }
               }
-              if (tx.payment_status === 'unpaid') {
-                txPiutang += txSales;
-              }
             } else {
               txSales = tx.total || 0;
-              if (tx.payment_status === 'unpaid') {
-                txPiutang = tx.total || 0;
-              }
               if (tx.transaction_items) {
                 for (const item of tx.transaction_items) {
                   const sellPrice = item.price || 0;
@@ -153,7 +147,7 @@ export default function AdminDashboard() {
             // Aggregate qty per product
             if (tx.transaction_items) {
               for (const item of tx.transaction_items) {
-                if (activeFilters.category !== 'all' && activeFilters.categoryProductIds.size > 0 && !activeFilters.categoryProductIds.has(item.product_id)) {
+                if (activeFilters.category !== 'all' && !activeFilters.categoryProductIds.has(item.product_id)) {
                   continue;
                 }
                 const info = productMap.get(item.product_id);
@@ -170,7 +164,6 @@ export default function AdminDashboard() {
 
             totalSales += txSales;
             totalNetProfit += txProfit;
-            totalPiutangAmount += txPiutang;
 
             // Breakdown by payment method
             if ((tx as any).payment_method === 'cash') {
@@ -189,26 +182,29 @@ export default function AdminDashboard() {
         // 2. Pembelian (Berdasarkan filter tanggal)
         let purchaseQuery = supabase
           .from('purchases')
-          .select('total_amount, purchase_items(product_id)')
+          .select('total_amount, purchase_items(product_id,qty,buy_price)')
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
           
-        const { data: purchaseData } = await purchaseQuery;
+        const { data: purchaseData, error: purchaseError } = await purchaseQuery;
+        if (purchaseError) throw purchaseError;
         
         let totalPurchases = 0;
         if (purchaseData) {
           let filteredPurchases = purchaseData;
-          if (activeFilters.category !== 'all' && activeFilters.categoryProductIds.size > 0) {
-            filteredPurchases = filteredPurchases.filter((p: any) => 
-              p.purchase_items?.some((item: any) => activeFilters.categoryProductIds.has(item.product_id))
-            );
+          if (activeFilters.category !== 'all') {
+            totalPurchases = filteredPurchases.reduce((sum, purchase) => sum +
+              (purchase.purchase_items ?? []).reduce((itemSum: number, item: {product_id: string | null; qty: number; buy_price: number}) =>
+                itemSum + (item.product_id && activeFilters.categoryProductIds.has(item.product_id) ? item.qty * item.buy_price : 0), 0), 0);
+          } else {
+            totalPurchases = filteredPurchases.reduce((sum, p) => sum + p.total_amount, 0);
           }
-          totalPurchases = filteredPurchases.reduce((sum, p) => sum + p.total_amount, 0);
         }
 
         // 3. Produk Stok Menipis (Independent dari filter tanggal)
-        const { data: ingredientsData } = await supabase.from('ingredients')
+        const { data: ingredientsData, error: ingredientsError } = await supabase.from('ingredients')
           .select('id,name,current_stock,min_stock_alert,yield_quantity,unit,cost_price');
+        if (ingredientsError) throw ingredientsError;
         const lowStock = (ingredientsData ?? []).map(item => ({
           id: item.id, name: item.name, categories: { name: 'Bahan Baku' },
           price: Number(item.cost_price ?? 0), stock: Number(item.current_stock ?? 0) / Number(item.yield_quantity || 1),
@@ -216,11 +212,12 @@ export default function AdminDashboard() {
         })).filter(item => item.stock <= item.threshold).sort((a,b) => a.stock - b.stock).slice(0,10);
 
         // 2.5 Pengeluaran (Expenses)
-        const { data: expenseData } = await supabase
+        const { data: expenseData, error: expenseError } = await supabase
           .from('expenses')
           .select('amount')
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
+        if (expenseError) throw expenseError;
         
         let totalExpenses = 0;
         if (expenseData) {
@@ -230,7 +227,6 @@ export default function AdminDashboard() {
         setStats({ 
           salesTotal: totalSales, 
           netProfitTotal: totalNetProfit, 
-          piutangTotal: totalPiutangAmount, 
           purchasesTotal: totalPurchases,
           cashTotal: totalCash,
           qrisTotal: totalQris,
@@ -241,6 +237,7 @@ export default function AdminDashboard() {
 
       } catch (err) {
         console.error('Gagal mengambil data dashboard:', err);
+        setLoadError(err instanceof Error ? err.message : 'Gagal memuat dashboard');
       } finally {
         setIsLoading(false);
       }
@@ -252,10 +249,13 @@ export default function AdminDashboard() {
   const handleApplyFilter = async () => {
     let prodIds = new Set<string>();
     if (selectedCategory !== 'all') {
-      const { data } = await supabase.from('products').select('id').eq('category_id', selectedCategory);
+      const { data, error } = await supabase.from('products').select('id').eq('category_id', selectedCategory);
+      if (error) {
+        setLoadError(error.message);
+        return;
+      }
       if (data) prodIds = new Set(data.map(p => p.id));
     }
-    setCategoryProductIds(prodIds);
     setActiveFilters({
       startDate,
       endDate,
@@ -275,6 +275,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-4 md:p-8 h-full overflow-y-auto bg-slate-50">
+      {loadError && <div role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-red-700">Gagal memuat dashboard: {loadError} <button type="button" onClick={handleApplyFilter} className="underline">Coba lagi</button></div>}
       <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Dashboard Utama</h1>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { browserDataClient } from '@/lib/browser-data-client';
+import { saveMaster, deleteMaster } from '@/app/actions/master-data';
 import { Plus, Trash2, Loader2, X, Save, Edit2 } from 'lucide-react';
 
 const supabase = browserDataClient;
@@ -9,6 +10,7 @@ const supabase = browserDataClient;
 export default function AdminSuppliers() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<any>(null);
@@ -21,22 +23,20 @@ export default function AdminSuppliers() {
 
   const fetchSuppliers = async () => {
     setIsLoading(true);
+    setLoadError('');
     const { data, error } = await supabase.from('suppliers').select('*').order('name');
     if (!error && data) {
       setSuppliers(data);
     }
+    if (error) setLoadError(error.message);
     setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus supplier ini?')) return;
-    
-    const { error } = await supabase.from('suppliers').delete().eq('id', id);
-    if (!error) {
-      setSuppliers(suppliers.filter(s => s.id !== id));
-    } else {
-      alert('Gagal menghapus supplier. Error: ' + error.message);
-    }
+    if (!confirm('Hapus supplier ini? Data yang masih digunakan tidak dapat dihapus.')) return;
+    const result = await deleteMaster('suppliers', id);
+    if (result.success) await fetchSuppliers();
+    else alert(result.error);
   };
 
   const openModal = (supplier?: any) => {
@@ -58,46 +58,21 @@ export default function AdminSuppliers() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    const payload = { 
-      name: formData.name,
-      phone: formData.contact,
-      address: formData.address
-    };
-
-    if (editingSupplier) {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .update(payload)
-        .eq('id', editingSupplier.id)
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setSuppliers(suppliers.map(s => s.id === data.id ? data : s));
-        closeModal();
-      } else {
-        alert('Gagal memperbarui supplier: ' + error?.message);
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .insert([payload])
-        .select()
-        .single();
-        
-      if (!error && data) {
-        setSuppliers([...suppliers, data]);
-        closeModal();
-      } else {
-        alert('Gagal menambahkan supplier: ' + error?.message);
-      }
+    try {
+      const result = await saveMaster('suppliers', editingSupplier?.id ?? null, { name: formData.name, phone: formData.contact, address: formData.address });
+      if (!result.success) throw new Error(result.error);
+      closeModal();
+      await fetchSuppliers();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Gagal menyimpan supplier');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col">
+      {loadError && <div role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-red-700">Gagal memuat data: {loadError} <button type="button" onClick={fetchSuppliers} className="underline">Coba lagi</button></div>}
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-800">Data Supplier / Pabrik</h1>

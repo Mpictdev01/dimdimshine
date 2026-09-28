@@ -61,7 +61,7 @@ export default function InstallPrompt() {
     setIsReadyForInstall(false);
   }
 
-  if (!isReadyForInstall && !showIosPrompt) return null;
+  if ((!isReadyForInstall && !showIosPrompt) || pathname === '/pos/shift' || pathname === '/admin/login' || pathname === '/change-pin') return null;
 
   const isAdmin = pathname?.startsWith('/admin');
   const appName = isAdmin ? "DIMDIM SHINE Backoffice" : "DIMDIM SHINE POS";
@@ -70,9 +70,9 @@ export default function InstallPrompt() {
     : "Akses kasir lebih cepat dan lancar dari layar beranda Anda.";
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white border border-zinc-200 shadow-2xl rounded-xl p-4 z-50 flex flex-col sm:flex-row items-center gap-4 transition-all duration-500 ease-out transform translate-y-0">
+    <div className="clay-surface fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white border border-zinc-200 shadow-2xl rounded-2xl p-4 z-50 flex flex-col sm:flex-row items-center gap-4 transition-all duration-500 ease-out transform translate-y-0">
       <div className="bg-zinc-100 p-3 rounded-lg flex-shrink-0">
-        <img src="/DIMDIM_SHINE.png" alt={`${appName} Icon`} className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
+        <img src="/poslogo.png" alt={`${appName} Icon`} className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
         {/* Fallback icon if image fails to load */}
         <Download className="w-8 h-8 text-zinc-900 absolute top-3 left-3 opacity-0" style={{ zIndex: -1 }} />
       </div>
@@ -102,7 +102,7 @@ export default function InstallPrompt() {
         {!showIosPrompt && (
           <button
             onClick={downloadApp}
-            className="bg-black text-white px-4 py-2 text-sm rounded-lg font-medium hover:bg-zinc-800 transition-colors flex-1"
+            className="bg-blue-600 text-white px-4 py-2 text-sm rounded-xl font-medium hover:bg-blue-700 transition-colors flex-1"
           >
             Install
           </button>

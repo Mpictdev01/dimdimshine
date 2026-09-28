@@ -7,14 +7,14 @@ export const metadata = {
   manifest: '/manifest-admin.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'DIMDIM SHINE Backoffice',
   },
 };
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-full bg-slate-50 overflow-hidden font-sans">
+    <div className="clay-shell flex flex-col lg:flex-row h-screen w-full bg-slate-50 overflow-hidden font-sans">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
         {children}

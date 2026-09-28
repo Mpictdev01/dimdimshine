@@ -1,328 +1,98 @@
-# DIMDIM SHINE POS - Developer Guide
+# Panduan pengembang DIMDIM SHINE
 
-Dokumen ini dibuat untuk membantu developer baru memahami struktur, teknologi, dan alur kerja aplikasi **DIMDIM SHINE POS** — sebuah sistem Point of Sale dan Sales Management untuk distribusi/grosir.
+Diperbarui 28 September 2026 berdasarkan source saat ini dan inspeksi database baca saja. `graphify-out/GRAPH_REPORT.md` bertanggal 27 Juli dan menggambarkan arsitektur lama; gunakan source dan dokumen ini untuk pekerjaan pascamigrasi.
 
-## 🚀 Teknologi yang Digunakan (Tech Stack)
+## Teknologi dan batas sistem
 
-| Kategori | Teknologi | Versi |
-|---|---|---|
-| **Framework** | Next.js (App Router) | 16.2.4 |
-| **UI Library** | React | 19.2.4 |
-| **Styling** | Tailwind CSS v4 | ^4 |
-| **Utility CSS** | `clsx`, `tailwind-merge` | ^2.1.1, ^3.6.0 |
-| **Database & Auth** | Supabase (`@supabase/supabase-js`) | ^2.108.2 |
-| **State Management** | Zustand (dengan `persist` middleware) | ^5.0.14 |
-| **PWA** | `@ducanh2912/next-pwa` + `idb` (IndexedDB) | ^10.2.9, ^8.0.3 |
-| **Ikon** | `lucide-react` | ^1.21.0 |
-| **Tanggal** | `date-fns` | ^4.4.0 |
-| **Ekspor Excel** | `xlsx` (SheetJS) | ^0.18.5 |
-| **Font** | Geist & Geist Mono (via `next/font/google`) | — |
-| **Bahasa** | TypeScript | ^5 |
+- Next.js 16.2.4 App Router, React 19.2.4, TypeScript, Tailwind CSS 4.
+- Supabase PostgreSQL melalui `@supabase/supabase-js` di server. Browser memakai `browserDataClient` yang meneruskan REST ke `/api/data/[table]` pada origin yang sama.
+- Zustand `persist` menyimpan keranjang dan salinan shift di localStorage. Sumber kebenaran autentikasi adalah cookie `dimdim_session` dan tabel `pos_sessions`; sumber kebenaran shift adalah tabel `shifts`.
+- PWA memakai `public/sw.js` online only. Navigasi mengambil jaringan dan cache worker lama dibersihkan saat aktivasi. Label “Online” pada layout POS saat ini statis.
+- Konfigurasi server: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY`, opsi `MAINTENANCE_MODE`. Tidak ada `NEXT_PUBLIC_SUPABASE_ANON_KEY` yang dibutuhkan aplikasi sekarang.
 
----
-
-## 📂 Struktur Folder Lengkap (Folder Map)
-
-Berikut pemetaan folder dan file beserta fungsinya berdasarkan kondisi terkini:
+## Arsitektur request
 
 ```text
-dimdimshine-pos/
-├── app/                              # Direktori utama Next.js (App Router)
-│   ├── actions/                      # Server Actions (logika backend)
-│   │   ├── inventory.ts              # Penyesuaian stok (stock opname)
-│   │   ├── purchase.ts               # Pencatatan pembelian barang dari supplier
-│   │   ├── shift.ts                  # Login PIN, buka/tutup shift sales
-│   │   └── transaction.ts            # Proses, hapus, dan hapus batch transaksi
-│   │
-│   ├── admin/                        # Halaman & Routing untuk Admin Backoffice
-│   │   ├── layout.tsx                # Layout admin (Sidebar + konten utama)
-│   │   ├── page.tsx                  # Dashboard utama (ringkasan bisnis)
-│   │   ├── login/
-│   │   │   └── page.tsx              # Halaman login admin (PIN-based)
-│   │   ├── products/
-│   │   │   ├── page.tsx              # CRUD daftar produk (nama, harga, kategori, satuan)
-│   │   │   ├── categories/
-│   │   │   │   └── page.tsx          # CRUD kategori produk
-│   │   │   └── units/
-│   │   │       └── page.tsx          # CRUD satuan produk (pcs, kg, dus, dll)
-│   │   ├── inventory/
-│   │   │   ├── page.tsx              # Manajemen bahan baku / ingredients
-│   │   │   ├── purchases/
-│   │   │   │   └── page.tsx          # Pencatatan pembelian dari supplier
-│   │   │   ├── suppliers/
-│   │   │   │   └── page.tsx          # CRUD data supplier
-│   │   │   └── adjustments/
-│   │   │       └── page.tsx          # Penyesuaian stok (stock opname)
-│   │   ├── customers/
-│   │   │   ├── page.tsx              # CRUD pelanggan/toko (nama, telepon, alamat, area)
-│   │   │   ├── areas/
-│   │   │   │   └── page.tsx          # CRUD area/rute pengiriman
-│   │   │   └── customer-list/
-│   │   │       └── page.tsx          # Daftar pelanggan (tampilan alternatif)
-│   │   ├── employees/
-│   │   │   └── page.tsx              # CRUD pegawai/sales (nama, role, PIN)
-│   │   ├── receivables/
-│   │   │   └── page.tsx              # Manajemen piutang (tagihan belum lunas)
-│   │   ├── reports/
-│   │   │   ├── page.tsx              # Laporan transaksi (50 terakhir)
-│   │   │   ├── sales/
-│   │   │   │   └── page.tsx          # Riwayat penjualan detail + hapus transaksi
-│   │   │   ├── recap/
-│   │   │   │   └── page.tsx          # Rekap penjualan (agregasi per periode)
-│   │   │   ├── stock/
-│   │   │   │   └── page.tsx          # Riwayat pergerakan stok (inventory ledger)
-│   │   │   └── stock-summary/
-│   │   │       └── page.tsx          # Rekap ringkasan stok produk
-│   │   └── settings/
-│   │       └── page.tsx              # Pengaturan toko (nama, alamat, pajak PPN)
-│   │
-│   ├── components/                   # Reusable UI Components
-│   │   ├── InstallPrompt.tsx         # Banner install PWA (Android + iOS)
-│   │   ├── admin/
-│   │   │   └── Sidebar.tsx           # Navigasi samping admin (collapsible, responsive)
-│   │   └── pos/
-│   │       ├── Cart.tsx              # Keranjang belanja + kontrol order & pelanggan
-│   │       ├── CustomerModal.tsx     # Modal pemilihan/pencarian pelanggan
-│   │       └── ProductCard.tsx       # Kartu tampilan produk di POS (list-style)
-│   │
-│   ├── pos/                          # Halaman & Routing untuk antarmuka Sales/Penjualan
-│   │   ├── layout.tsx                # Layout POS (header + status online)
-│   │   ├── page.tsx                  # Halaman utama POS (katalog + keranjang)
-│   │   ├── checkout/
-│   │   │   └── page.tsx              # Proses pembayaran (lunas/tempo) + struk
-│   │   └── shift/
-│   │       └── page.tsx              # Login shift sales (PIN-based)
-│   │
-│   ├── globals.css                   # File styling global (Tailwind v4 + custom vars)
-│   ├── layout.tsx                    # Root layout (font, metadata, PWA prompt)
-│   ├── page.tsx                      # Redirect otomatis ke /pos
-│   └── favicon.ico
-│
-├── lib/                              # Modul utilitas dan konfigurasi
-│   ├── store/
-│   │   └── usePosStore.ts            # Zustand store (keranjang, shift, pelanggan, order)
-│   └── supabase/
-│       └── client.ts                 # Singleton Supabase client
-│
-├── public/                           # Aset statis
-│   ├── DIMDIM_SHINE.png                      # Logo/ikon aplikasi
-│   └── manifest.json                 # PWA Web App Manifest
-│
-├── next.config.ts                    # Konfigurasi Next.js + PWA (Workbox)
-├── package.json
-├── tsconfig.json
-├── postcss.config.mjs
-├── eslint.config.mjs
-├── .env.local                        # Environment variables (Supabase URL + Keys)
-└── DEVELOPER_GUIDE.md                # Dokumen ini
+Browser page / component
+  ├─ Server Action → requireRole → db() → pos_* RPC / tabel Supabase
+  └─ browserDataClient → /api/data/[table] → requireRole → allowlist → REST Supabase
+
+proxy.ts → verifikasi cookie untuk navigasi /admin, /pos, /change-pin
+Cookie dimdim_session → SHA-256 token → pos_sessions → users
+Zustand localStorage → keranjang dan salinan currentShift untuk tampilan
 ```
 
----
+`lib/server/session.ts` membuat token acak dan menyimpan hash token saja di database. PIN diperiksa oleh `pos_login` memakai `pin_hash` dan batas percobaan. Kasir mempunyai sesi maksimal 12 jam, manager dan super admin 8 jam. `requireRole` menolak sesi kedaluwarsa, akun nonaktif, role tidak sesuai, dan akun yang wajib ganti PIN. Logout mencabut token sesi.
 
-## 🔑 Environment Variables
+`proxy.ts` memeriksa sesi pada navigasi `/admin/*`, `/pos/*`, dan `/change-pin`; ia juga mengembalikan 503 saat maintenance mode. Route `/api/data/[table]` tidak memakai matcher itu dan melakukan `requireRole` sendiri. Halaman login dikecualikan dari pemeriksaan proxy. Navigasi admin dengan sesi tidak valid saat ini diarahkan ke `/pos/shift`, sebuah detail UX yang perlu diuji.
 
-File `.env.local` berisi konfigurasi koneksi ke Supabase:
+Proxy `app/api/data/[table]/route.ts` hanya menerima tabel terdaftar dan hanya melayani baca. Kasir mendapat kolom/tabel terbatas; manager/super admin dapat membaca daftar admin. Semua mutasi menggunakan Server Actions dengan pemeriksaan sesi/peran; master data dan pengaturan ada di `app/actions/master-data.ts`. Proxy memaksa proyeksi kolom sendiri.
 
-| Variabel | Deskripsi |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL project Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key Supabase |
-| `NEXT_SUPABASE_SERVICE_ROLE_KEY` | *(Opsional)* Service role key untuk server actions (purchase, inventory) |
+## Peta route
 
----
+| Route | Fungsi sekarang | File utama |
+| --- | --- | --- |
+| `/` | Alihkan ke POS | `app/page.tsx` |
+| `/pos/shift` | Login PIN, buka atau pulihkan shift | `app/pos/shift/page.tsx` |
+| `/change-pin` | Ganti PIN wajib / sendiri | `app/change-pin/page.tsx` |
+| `/pos` | Katalog, keranjang, pengeluaran, laporan WA, tutup shift | `app/pos/page.tsx` |
+| `/pos/checkout` | Quote server, bayar tunai/QRIS, cetak | `app/pos/checkout/page.tsx` |
+| `/admin/login` | Login manager / super admin | `app/admin/login/page.tsx` |
+| `/admin` | Dashboard bisnis dan filter | `app/admin/page.tsx` |
+| `/admin/products` | Produk, resep, duplikasi | `app/admin/products/page.tsx` |
+| `/admin/products/categories` | CRUD kategori | `app/admin/products/categories/page.tsx` |
+| `/admin/products/units` | CRUD satuan | `app/admin/products/units/page.tsx` |
+| `/admin/inventory` | Alihkan ke bahan baku | `app/admin/inventory/page.tsx` |
+| `/admin/inventory/ingredients` | Bahan baku dan yield | `app/admin/inventory/ingredients/page.tsx` |
+| `/admin/inventory/purchases` | Pembelian produk langsung / bahan | `app/admin/inventory/purchases/page.tsx` |
+| `/admin/inventory/suppliers` | CRUD supplier | `app/admin/inventory/suppliers/page.tsx` |
+| `/admin/inventory/adjustments` | Penyesuaian stok | `app/admin/inventory/adjustments/page.tsx` |
+| `/admin/reports` | Alihkan ke riwayat penjualan | `app/admin/reports/page.tsx` |
+| `/admin/reports/sales` | Riwayat, filter, cetak, void | `app/admin/reports/sales/page.tsx` |
+| `/admin/reports/recap` | Rekap, ekspor, void batch | `app/admin/reports/recap/page.tsx` |
+| `/admin/reports/stock` | Ledger stok | `app/admin/reports/stock/page.tsx` |
+| `/admin/reports/stock-summary` | Rekap stok dan aset | `app/admin/reports/stock-summary/page.tsx` |
+| `/admin/employees` | Pegawai dan reset PIN | `app/admin/employees/page.tsx` |
+| `/admin/settings` | Profil toko dan pajak | `app/admin/settings/page.tsx` |
+| `/admin/customers`, `/admin/customers/areas` | Pelanggan dan area; tersedia di sidebar | `app/admin/customers/` |
+| `/api/data/[table]` | Proxy data internal untuk browser | `app/api/data/[table]/route.ts` |
 
-## 🔄 Alur Aplikasi (App Flow)
+`app/components/admin/Sidebar.tsx` memuat menu dashboard, produk, inventory, laporan, pelanggan/area, pegawai, dan pengaturan. Route piutang telah dihapus dari aplikasi aktif; pelanggan/area tetap menjadi master data admin. Lihat [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). `CustomerModal.tsx` tidak dipanggil oleh halaman kasir saat ini.
 
-Aplikasi memiliki **dua antarmuka utama** yang melayani peran berbeda:
+## Alur penjualan aktif
 
-### 1. Sales / POS Flow (`/pos/*`)
-Antarmuka ini digunakan oleh staf sales untuk memproses pesanan harian.
+1. `listCashierAccounts` mengisi dropdown `/pos/shift` dari akun aktif berole `cashier`. `listAdminAccounts` mengisi dropdown `/admin/login` dari akun aktif berole `manager` atau `super_admin`. Pengguna memilih akun dan PIN; `loginAccount` memanggil `signIn` lalu `pos_login`. Token sesi tersimpan sebagai cookie HttpOnly. Akun yang wajib mengganti PIN dialihkan ke `/change-pin`.
+2. `activeShift` mencari shift open milik pengguna. Bila tidak ada, `openShift` memanggil `pos_open_shift` dengan kas awal 0 tanpa input kasir; indeks unik mencegah dua shift open per kasir. Halaman menyimpan salinan shift di Zustand.
+3. POS membaca produk, kategori, dan bahan melalui proxy. Stok produk BOM dihitung dari bahan; produk biasa memakai `products.stock`. Keranjang memperoleh `pos_quote` agar harga/pajak berasal dari server.
+4. Checkout mendukung `cash` atau `qris`; QRIS memerlukan konfirmasi operator. `pos_create_sale` memeriksa shift, quote hash, stok, dan idempotency key, lalu membuat transaksi/item/usage serta mengurangi stok secara atomik.
+5. `closeShift` menutup baris shift milik pengguna yang masih `open` melalui satu UPDATE terjaga, lalu UI logout. Penutupan ini tidak mencatat kas fisik, kas harapan, atau selisih; ketiga kolom dibiarkan null. Fungsi SQL lama `pos_close_shift` tetap ada untuk kompatibilitas, tetapi tidak dipanggil alur POS saat ini.
 
-```
-/pos/shift (Login PIN) → /pos (Katalog + Keranjang) → /pos/checkout (Pembayaran)
-```
+Checkout baru selalu menyimpan `order_type='sale'`, `customer_id=null`, `payment_status='paid'`. Tidak ada alur tempo atau pengiriman pada checkout sekarang. Store masih menyimpan field lama `activeCustomer`, `orderType`, dan `notes`, tetapi tidak dipakai payload penjualan.
 
-#### Langkah-langkah:
-1. **Login Shift** (`/pos/shift`): Sales memasukkan PIN → sistem memverifikasi via `loginWithPin()` → membuka shift via `openShift()` → data shift disimpan di Zustand store (persist ke localStorage).
-2. **Halaman POS** (`/pos`): Menampilkan katalog produk dengan pencarian & filter kategori. Produk ter-subscribe ke Supabase Realtime (auto-refresh jika ada perubahan dari Backoffice).
-3. **Keranjang** (`Cart.tsx`): Mengelola item pesanan, kuantitas, tipe order (Kirim/Ambil), pemilihan pelanggan via `CustomerModal.tsx`, dan catatan.
-4. **Checkout** (`/pos/checkout`): Pilih status pembayaran (Lunas/Tempo). Jika Tempo, bisa set tanggal jatuh tempo. Proses via `processTransaction()` → simpan ke `transactions` + `transaction_items` + deduct stok produk.
-5. **Sukses**: Tampilkan struk pembayaran dengan opsi cetak struk atau cetak surat jalan.
+## Aksi server dan database
 
-#### Guard/Proteksi:
-- Tanpa shift aktif → redirect ke `/pos/shift`.
-- Keranjang kosong → tidak bisa ke checkout.
-- Pelanggan wajib dipilih sebelum lanjut bayar.
-- Stok dicek saat menambah ke keranjang (validasi `maxStock`).
+| Modul | Aksi server | Fungsi database / tabel |
+| --- | --- | --- |
+| `auth.ts` | daftar akun, login, sesi, logout, PIN | `pos_login`, `pos_change_pin`, `pos_sessions` |
+| `shift.ts` | shift aktif, buka, ringkasan, tutup | `shifts`, `pos_open_shift` |
+| `transaction.ts` | quote, jual, void tunggal/batch | `pos_quote`, `pos_create_sale`, `pos_void_sale` |
+| `expense.ts` | buat/hapus pengeluaran | `pos_create_expense`, `pos_delete_expense` |
+| `purchase.ts` | pembelian | `pos_create_purchase` |
+| `inventory.ts` | penyesuaian / pembalikan | `pos_adjust_stock`, `pos_delete_adjustments` |
+| `products.ts` | simpan/hapus produk | `pos_save_product`, `pos_delete_products` |
+| `ingredients.ts` | simpan/hapus bahan | `pos_save_ingredient`, `pos_delete_ingredient` |
+| `employees.ts` | simpan/nonaktifkan akun | `pos_save_user`, `pos_deactivate_user` |
 
-### 2. Admin / Backoffice Flow (`/admin/*`)
-Antarmuka ini digunakan oleh pemilik toko atau manajer untuk mengelola seluruh bisnis.
+Semua aksi mutasi kritis memeriksa role di server. Fungsi database tidak boleh dipanggil dari browser langsung. Rincian tabel, kolom, fungsi, dan kondisi data ada di [DATABASE_REFERENCE.md](DATABASE_REFERENCE.md).
 
-#### Otentikasi:
-- Login via PIN di `/admin/login` → hanya role `super_admin` atau `manager` yang diizinkan.
-- Session disimpan di `sessionStorage` sebagai `admin_auth`.
-- Setiap halaman admin mengecek `sessionStorage` → redirect ke login jika tidak ada.
+## Panduan kerja dan verifikasi
 
-#### Modul-modul:
+1. Mulai dari `graphify-out/` untuk orientasi, tetapi cek tanggal laporannya. Baca `AGENTS.md` dan bagian yang relevan di `DEVELOPER_GUIDE.md`. Ikuti dokumentasi Next yang terpasang di `node_modules/next/dist/docs/` sebelum menulis kode Next.js.
+2. Kembangkan pada staging. Jangan memakai token, PIN, atau secret produksi di log, test, commit, atau dokumentasi.
+3. Untuk perubahan kontrak tabel/kolom/izin, periksa pemanggil proxy, Server Actions, UI, dan fungsi database bersama sama. Jangan memperluas hak anon agar halaman lama kembali bekerja.
+4. Jalankan `npx tsc --noEmit`, `npm run lint`, `npm run build`. Lint saat audit masih gagal; lihat [POST_MIGRATION_AUDIT.md](POST_MIGRATION_AUDIT.md).
+5. Uji alur lengkap per role pada staging: login, expiry, shift, quote, tunai, QRIS, pembelian, adjustment, void, laporan, dan PWA. Pisahkan pengujian mutasi dari audit produksi baca saja.
 
-| Menu Sidebar | Path | Fungsi |
-|---|---|---|
-| **Dashboard** | `/admin` | Ringkasan Penjualan, Laba Bersih, Piutang, Pembelian (dengan filter tanggal, pelanggan, produk). Tabel peringatan stok menipis (< 20). |
-| **Produk → Daftar Produk** | `/admin/products` | CRUD produk (nama, kategori, harga jual, satuan). Bulk select + delete. |
-| **Produk → Kategori** | `/admin/products/categories` | CRUD kategori produk. |
-| **Produk → Satuan** | `/admin/products/units` | CRUD satuan (pcs, kg, dus, karton, dll). |
-| **Inventory → Pembelian** | `/admin/inventory/purchases` | Catat pembelian dari supplier (pilih supplier, tambah item + kuantitas + harga beli). Otomatis update stok produk + `cost_price`. |
-| **Inventory → Data Supplier** | `/admin/inventory/suppliers` | CRUD data supplier (nama, alamat, telepon). |
-| **Inventory → Penyesuaian Stok** | `/admin/inventory/adjustments` | Stock opname manual. Catat perbedaan stok aktual vs sistem dengan alasan (rusak, hilang, koreksi, dll). |
-| **Inventory → Bahan Baku** | `/admin/inventory` | CRUD bahan baku/ingredients (untuk fitur BOM di masa depan). |
-| **Pelanggan → Daftar Toko** | `/admin/customers` | CRUD pelanggan/toko (nama, telepon, alamat, area). |
-| **Pelanggan → Area / Rute** | `/admin/customers/areas` | CRUD area/rute pengiriman. |
-| **Riwayat → Riwayat Penjualan** | `/admin/reports/sales` | Detail semua transaksi penjualan dengan filter, hapus satuan/batch dengan opsi restore stok. |
-| **Riwayat → Rekap Penjualan** | `/admin/reports/recap` | Agregasi penjualan per periode (harian/bulanan). |
-| **Riwayat → Riwayat Stok** | `/admin/reports/stock` | Inventory Ledger — riwayat pergerakan barang masuk/keluar dari semua sumber (pembelian, penjualan, opname). |
-| **Riwayat → Rekap Stok** | `/admin/reports/stock-summary` | Ringkasan stok semua produk. |
-| **Piutang** | `/admin/receivables` | Menampilkan transaksi dengan status `unpaid`. Tandai lunas → update `payment_status` ke `paid`. Indikator jatuh tempo. |
-| **Sales & Pegawai** | `/admin/employees` | CRUD pegawai (nama, role: `cashier`/`manager`/`super_admin`, PIN). Super Admin tidak bisa dihapus. |
-| **Pengaturan** | `/admin/settings` | Profil bisnis (nama toko, alamat), tarif PPN (%), dan service charge (%). |
+## Masalah yang sudah diketahui
 
----
-
-## 🛠 Panduan Teknis & Arsitektur
-
-### 1. State Management (Zustand + Persist)
-File: `lib/store/usePosStore.ts`
-
-Store ini menggunakan middleware `persist` dengan `localStorage` sebagai storage. State yang disimpan:
-- **`cart`**: Array `CartItem` (id, productId, name, price, quantity, unit, maxStock).
-- **`currentShift`**: `ShiftInfo` (id, cashierId, cashierName, startTime, startingCash).
-- **`activeCustomer`**: Pelanggan yang dipilih (`{ id, name }`). Nilai spesial `id: 'new-customer'` untuk pelanggan baru.
-- **`orderType`**: `'delivery' | 'pickup'`.
-- **`notes`**: Catatan/nama pelanggan baru.
-
-Actions: `addToCart`, `removeFromCart`, `updateQuantity`, `clearCart`, `setShift`, `endShift`, `setActiveCustomer`, `setOrderType`, `setNotes`.
-
-Validasi stok dilakukan di `addToCart` dan `updateQuantity` — jika kuantitas melebihi `maxStock`, operasi ditolak dengan alert.
-
-### 2. Server Actions (`app/actions/`)
-
-| File | Fungsi | Deskripsi |
-|---|---|---|
-| `shift.ts` | `loginWithPin(pin)` | Verifikasi PIN dari tabel `users`. Hanya role `cashier`, `manager`, `super_admin` yang diizinkan. |
-| | `openShift(cashierId, startingCash)` | Insert shift baru dengan status `open` ke tabel `shifts`. |
-| | `closeShift(shiftId, endingCash)` | Update shift dengan `end_time` dan status `closed`. |
-| `transaction.ts` | `processTransaction(payload)` | Insert ke `transactions` + `transaction_items` + deduct `products.stock`. Menyimpan `cost_price` dari produk. |
-| | `deleteTransaction(txId, shouldRestoreStock)` | Hapus transaksi tunggal + kembalikan stok jika diminta. |
-| | `deleteTransactions(txIds, shouldRestoreStock)` | Hapus batch transaksi + restore stok teragregasi per produk. |
-| `purchase.ts` | `createPurchase(supplierId, items, note, totalAmount)` | Insert ke `purchases` + `purchase_items` + update `products.stock` dan `cost_price`. |
-| `inventory.ts` | `createStockAdjustment(productId, oldStock, newStock, reason, note)` | Insert ke `stock_adjustments` + update `products.stock`. |
-| | `deleteAdjustments(ids, revertStock)` | Hapus penyesuaian + revert stok jika diminta. |
-
-### 3. Interaksi Database (Supabase)
-
-#### Tabel-tabel utama (berdasarkan penggunaan di kode):
-| Tabel | Fungsi |
-|---|---|
-| `users` | Akun pegawai (full_name, role, pin) |
-| `shifts` | Sesi kerja sales (cashier_id, starting_cash, ending_cash, status, start_time, end_time) |
-| `products` | Produk (name, category_id, unit_id, price, cost_price, stock) |
-| `categories` | Kategori produk (name) |
-| `units` | Satuan produk (name) |
-| `transactions` | Transaksi penjualan (shift_id, cashier_id, customer_id, order_type, subtotal, tax, total, payment_method, payment_status, due_date, table_number) |
-| `transaction_items` | Item per transaksi (transaction_id, product_id, quantity, price, cost_price) |
-| `customers` | Pelanggan/toko (name, phone, address, area_id) |
-| `areas` | Area/rute pengiriman (name) |
-| `suppliers` | Supplier barang (name, address, phone) |
-| `purchases` | Header pembelian (supplier_id, total_amount, note) |
-| `purchase_items` | Item per pembelian (purchase_id, product_id, qty, buy_price) |
-| `stock_adjustments` | Log penyesuaian stok (product_id, old_stock, new_stock, difference, reason, note) |
-| `ingredients` | Bahan baku (name, unit, current_stock, min_stock_alert) |
-| `store_settings` | Pengaturan toko (store_name, address, tax_rate, service_charge) |
-
-#### Pola Arsitektur:
-- **Client-side reads**: Semua halaman menggunakan `createClient` langsung untuk baca data (SELECT). Menggunakan `useEffect` + state management.
-- **Realtime**: Halaman POS subscribe ke Supabase Realtime channel untuk deteksi perubahan produk secara live.
-- **Server Actions untuk mutasi**: Operasi critical (transaksi, pembelian, penyesuaian stok) dikirim melalui Next.js Server Actions untuk keamanan.
-- **Pajak dinamis**: Tarif PPN diambil dari `store_settings.tax_rate` di runtime (default 11%).
-
-### 4. Sistem Otentikasi
-
-Aplikasi menggunakan sistem PIN sederhana (tanpa Supabase Auth):
-- **POS Sales**: Login via PIN → verifikasi dari tabel `users` → shift disimpan di Zustand (localStorage) → persist antar page refresh.
-- **Admin Backoffice**: Login via PIN → hanya `super_admin` / `manager` → disimpan di `sessionStorage('admin_auth')` → hilang saat tab ditutup.
-
-### 5. Progressive Web App (PWA)
-
-Konfigurasi PWA di `next.config.ts` menggunakan `@ducanh2912/next-pwa`:
-- Service Worker di-generate ke folder `public/`.
-- `cacheOnFrontEndNav: true` — caching navigasi frontend.
-- `aggressiveFrontEndNavCaching: true` — caching agresif.
-- `reloadOnOnline: true` — reload saat kembali online.
-- Manifest di `public/manifest.json` dengan display `standalone`.
-- Komponen `InstallPrompt.tsx` menampilkan banner install untuk Android (via `beforeinstallprompt`) dan instruksi iOS (Add to Home Screen).
-
-### 6. Styling & Design System
-
-- Menggunakan Tailwind CSS v4 dengan `@import "tailwindcss"` syntax.
-- Custom CSS variables di `globals.css` untuk `--background` dan `--foreground`.
-- Font: Geist Sans dan Geist Mono via `next/font/google`.
-- Dipaksa mode terang (`color-scheme: light`) — dark mode di-disable.
-- Input field di-force warna slate-900 untuk konsistensi.
-- Komponen UI menggunakan pola:
-  - `rounded-2xl` / `rounded-3xl` untuk container
-  - `shadow-sm` / `shadow-md` untuk depth
-  - `border border-slate-100` untuk separator halus
-  - Animasi transisi dengan `transition-colors`, `transition-all`
-  - Responsive: `flex-col lg:flex-row` pattern
-
----
-
-## 💡 Tips untuk Developer Selanjutnya
-
-1. **Server vs Client Components**: Perhatikan penggunaan `'use client'` di Next.js 16. Semua halaman yang interaktif sudah ditandai. Layout admin (`/admin/layout.tsx`) adalah **server component** yang menampung Sidebar (client component).
-
-2. **Pola CRUD yang Konsisten**: Hampir semua halaman admin mengikuti pola yang sama:
-   - `useEffect` → cek auth → fetch data
-   - State: `isLoading`, `isModalOpen`, `formData`, `isSubmitting`
-   - Full-page modal overlay (slide-up transition) untuk form Tambah/Edit
-   - Floating action bar untuk bulk delete
-
-3. **Supabase Client**: Ada dua pola:
-   - `lib/supabase/client.ts` → singleton export (belum banyak dipakai).
-   - Inline `createClient()` di setiap page/component → ini yang paling banyak dipakai. Pertimbangkan untuk menyatukannya.
-
-4. **Styling**: Gunakan kelas Tailwind CSS semaksimal mungkin. Jika membutuhkan kelas dinamis, gunakan utilitas `clsx` dikombinasikan `tailwind-merge` agar kelas tidak saling menabrak.
-
-5. **Library `xlsx`**: Sudah diinstal tapi penggunaannya ada di halaman reports (sales/recap) untuk fitur ekspor ke Excel. Cek halaman `reports/sales` dan `reports/recap` untuk implementasinya.
-
-6. **Library `idb`**: Sudah diinstal untuk IndexedDB local storage. Ini dipersiapkan untuk mekanisme offline storage di masa depan, tapi belum diimplementasikan secara aktif di kode saat ini.
-
-7. **Tidak Ada File SQL**: Saat ini tidak ada file `.sql` di root proyek. Skema database dikelola langsung melalui Supabase Dashboard. Disarankan untuk mendokumentasikan skema jika ada perubahan signifikan.
-
----
-
-## 🚦 Menjalankan Aplikasi
-
-```bash
-# Install dependencies
-npm install
-
-# Jalankan development server
-npm run dev
-
-# Build untuk produksi
-npm run build
-
-# Jalankan server produksi
-npm start
-```
-
-Pastikan file `.env.local` sudah terisi dengan benar sebelum menjalankan.
-
-Semoga panduan ini membantu Anda memahami *codebase* DIMDIM SHINE POS dengan cepat! 🚀
-
----
-
-## 🤖 AI Agent Guidelines
-
-- Untuk menghemat token (*token efficiency*), AI Agent dilarang memuat seluruh isi dokumen ini ke dalam *system prompt* atau memori secara permanen.
-- AI Agent **DIWAJIBKAN** untuk menggunakan *tool* pembaca file (seperti `view_file` atau `read_file`) untuk membaca dokumen `DEVELOPER_GUIDE.md` ini setiap kali membutuhkan konteks mengenai struktur proyek, aturan state management, atau pedoman teknis, sebelum memberikan jawaban, usulan, maupun modifikasi kode.
+Lihat [POST_MIGRATION_AUDIT.md](POST_MIGRATION_AUDIT.md) untuk bukti per masalah dan [IMPROVEMENT_SUGGESTIONS.md](IMPROVEMENT_SUGGESTIONS.md) untuk urutan pengerjaan. Dokumentasi lama yang menyebut `admin_auth` di sessionStorage, PIN plaintext, anon key browser, penjualan tempo aktif, dan stok yang diperbarui dari client tidak berlaku untuk kode sekarang.

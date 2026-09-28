@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
@@ -55,6 +56,15 @@ const menuItems = [
     ]
   },
   { name: 'Sales & Pegawai', icon: Users, path: '/admin/employees' },
+  {
+    name: 'Pelanggan',
+    icon: Users,
+    path: '/admin/customers',
+    subItems: [
+      { name: 'Daftar Pelanggan', path: '/admin/customers' },
+      { name: 'Area / Rute', path: '/admin/customers/areas' },
+    ],
+  },
   { name: 'Pengaturan', icon: Settings, path: '/admin/settings' },
 ];
 
@@ -94,11 +104,12 @@ export default function Sidebar() {
 
   return (
     <>
-      <div className="lg:hidden flex items-center justify-between bg-slate-900 text-white h-16 px-4 shrink-0 border-b border-slate-800">
+      <div className="clay-header lg:hidden flex items-center justify-between bg-slate-900 text-white h-16 px-4 shrink-0 border-b border-slate-800">
         <div className="flex items-center gap-3">
-          <button onClick={() => setIsMobileOpen(true)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+          <button onClick={() => setIsMobileOpen(true)} aria-label="Buka menu admin" className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
             <Menu size={24} />
           </button>
+          <Image src="/poslogo.png" alt="" width={34} height={34} className="clay-logo h-8 w-8 object-cover" />
           <span className="font-bold text-lg">Dimdim Shine <span className="text-blue-500">Admin</span></span>
         </div>
       </div>
@@ -112,7 +123,7 @@ export default function Sidebar() {
 
       <div 
         className={clsx(
-          "bg-slate-900 text-slate-300 flex flex-col h-screen transition-all duration-300 z-50",
+          "clay-sidebar bg-slate-900 text-slate-300 flex flex-col h-screen transition-all duration-300 z-50",
           "fixed inset-y-0 left-0 lg:static lg:relative lg:translate-x-0",
           isCollapsed ? "lg:w-20" : "lg:w-64",
           "w-64",
@@ -121,15 +132,14 @@ export default function Sidebar() {
       >
         <div className="p-6 shrink-0 flex items-center justify-between border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <span className="font-bold text-lg text-white">DS</span>
-            </div>
+            <Image src="/poslogo.png" alt="Logo DIMDIM SHINE" width={40} height={40} className="clay-logo h-10 w-10 object-cover shrink-0" priority />
             {!isCollapsed && (
               <h1 className="text-xl font-bold text-white tracking-tight">Dimdim Shine <span className="text-blue-500">Admin</span></h1>
             )}
           </div>
           <button 
             onClick={() => setIsMobileOpen(false)}
+            aria-label="Tutup menu admin"
             className="lg:hidden text-slate-400 hover:text-white absolute right-4"
           >
             <X size={24} />
@@ -138,6 +148,7 @@ export default function Sidebar() {
 
       <button 
         onClick={() => setIsCollapsed(!isCollapsed)}
+        aria-label={isCollapsed ? 'Lebarkan menu admin' : 'Ciutkan menu admin'}
         className="hidden lg:flex absolute -right-3 top-20 bg-slate-800 p-1.5 rounded-full border border-slate-700 hover:bg-slate-700 text-white z-10"
       >
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}

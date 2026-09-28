@@ -1,8 +1,36 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0b0d12;
+  --foreground: #fff7f8;
+  --color-slate-50: #11151c;
+  --color-slate-100: #23212a;
+  --color-slate-200: #35303a;
+  --color-red-50: #45232d;
+  --color-red-100: #5c2c38;
+  --color-red-200: #793842;
+  --color-blue-50: #3b2029;
+  --color-blue-100: #4a2630;
+  --color-blue-200: #793842;
+  --color-blue-300: #a94a54;
+  --color-blue-400: #ff8290;
+  --color-blue-500: #f76570;
+  --color-blue-600: #ff7583;
+  --color-blue-700: #ff9ba6;
+  --color-blue-800: #ffc0c7;
+  --color-blue-900: #ffdae0;
+  --color-indigo-500: #ed5666;
+  --color-indigo-600: #d83447;
+  --color-indigo-700: #ff7b88;
+  --color-emerald-50: #1b382f;
+  --color-emerald-100: #23473a;
+  --color-emerald-200: #2f5748;
+  --color-green-100: #1b382f;
+  --color-amber-50: #44301d;
+  --color-amber-100: #573c22;
+  --color-amber-200: #704c29;
+  --color-purple-50: #3e2533;
+  --color-purple-100: #512e45;
 }
 
 @theme inline {
@@ -12,16 +40,167 @@
   --font-mono: ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Removed dark mode preferences to force light mode consistency */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
-  color-scheme: light;
+  color-scheme: dark;
 }
 
-input, textarea, select {
-  color: #0f172a !important;
+/* Shared dark clay surfaces for the existing POS and admin utility classes. */
+.clay-app {
+  background: radial-gradient(circle at 12% 0%, #1c2029 0, transparent 34%),
+    radial-gradient(circle at 90% 90%, #171b23 0, transparent 34%), #0b0d12;
+  color: #fff7f8;
+}
+
+.clay-app .clay-shell {
+  background: transparent !important;
+}
+
+.clay-app .clay-header {
+  background: linear-gradient(150deg, #282028, #15171d) !important;
+  border-color: #713443 !important;
+  box-shadow: 0 10px 24px #05060a8c, inset 1px 1px 0 #ffffff13;
+}
+
+.clay-app .clay-sidebar {
+  background: linear-gradient(165deg, #221a21, #101217 75%) !important;
+  border-right: 1px solid #713443;
+  box-shadow: 12px 0 30px #05060a8c, inset -1px 0 0 #ffffff0b;
+}
+
+.clay-app :is(.bg-white, .bg-white\/95) {
+  background-color: #301923 !important;
+}
+
+.clay-app .clay-shell.bg-slate-50,
+.clay-app .clay-shell.bg-slate-900 {
+  background: transparent !important;
+}
+
+.clay-app :is(.bg-slate-50, .bg-slate-50\/50, .bg-slate-50\/80, .bg-slate-50\/30, .bg-slate-50\/60) {
+  background-color: #11151c !important;
+}
+
+.clay-app :is(.bg-slate-100, .bg-slate-100\/60, .bg-zinc-100) {
+  background-color: #23212a !important;
+}
+
+.clay-app .bg-slate-200 { background-color: #35303a !important; }
+.clay-app .bg-slate-300 { background-color: #55424b !important; }
+.clay-app .bg-slate-800 { background-color: #24202a !important; }
+.clay-app .bg-slate-900 { background-color: #15171d !important; }
+.clay-app .bg-slate-700 { background-color: #342531 !important; }
+.clay-app :is(.bg-blue-50, .bg-blue-100, .bg-red-50, .bg-red-100) { background-color: #45232d !important; }
+.clay-app :is(.bg-purple-50, .bg-purple-100, .bg-indigo-100) { background-color: #3e2533 !important; }
+.clay-app :is(.bg-emerald-50, .bg-emerald-100) { background-color: #1d392f !important; }
+.clay-app .bg-green-100 { background-color: #1d392f !important; }
+.clay-app :is(.bg-amber-50, .bg-amber-100) { background-color: #403020 !important; }
+
+.clay-app :is(.text-slate-900, .text-slate-800, .text-zinc-900) { color: #fff7f8 !important; }
+.clay-app .text-slate-700 { color: #fbe9ed !important; }
+.clay-app .text-slate-600 { color: #e9d3d9 !important; }
+.clay-app :is(.text-slate-500, .text-zinc-500) { color: #d4bbc3 !important; }
+.clay-app .text-slate-400 { color: #c4aab3 !important; }
+.clay-app .text-slate-300 { color: #d5bfc6 !important; }
+.clay-app .text-slate-200 { color: #f0dfe4 !important; }
+.clay-app :is(.text-red-500, .text-red-600, .text-red-700, .text-rose-600) { color: #ff8390 !important; }
+.clay-app :is(.text-purple-600, .text-purple-700) { color: #dda0cc !important; }
+.clay-app :is(.text-green-500, .text-green-600, .text-green-700) { color: #80ddb2 !important; }
+.clay-app :is(.text-emerald-600, .text-emerald-700, .text-emerald-800, .text-emerald-900) { color: #80ddb2 !important; }
+.clay-app :is(.text-amber-600, .text-amber-700, .text-amber-800) { color: #ffd087 !important; }
+
+.clay-app :is(.border-slate-100, .border-slate-200, .border-slate-300, .border-slate-400, .border-slate-700, .border-slate-800, .border-zinc-200) { border-color: #4d323b !important; }
+.clay-app :is(.border-blue-100, .border-blue-200, .border-blue-300, .border-blue-500) { border-color: #aa4553 !important; }
+.clay-app :is(.border-red-100, .border-red-200) { border-color: #8f3a48 !important; }
+
+.clay-app .bg-white:is(.rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl):not(input):not(select):not(textarea),
+.clay-app .clay-surface {
+  border: 1px solid #a14c5d;
+  background: linear-gradient(145deg, #642637, #3a1825 78%) !important;
+  color: #fff7f8;
+  box-shadow: 9px 12px 24px #030408b8, -5px -5px 14px #a64d6047,
+    inset 1px 1px 0 #ffffff30, inset -2px -2px 6px #210a15a6 !important;
+}
+
+.clay-app .clay-action-card {
+  background: linear-gradient(145deg, #642637, #3a1825 78%) !important;
+  border: 1px solid #a14c5d !important;
+  color: #fff7f8 !important;
+  box-shadow: 6px 8px 17px #030408a6, inset 1px 1px 0 #ffffff30,
+    inset -2px -2px 6px #210a15a6 !important;
+}
+
+.clay-app .clay-action-card:hover {
+  background: linear-gradient(145deg, #743043, #4b1d2c 78%) !important;
+}
+
+/* Muted utility text must stay readable on the red card surface. */
+.clay-app .clay-surface :is(.text-slate-400, .text-slate-500, .text-zinc-500),
+.clay-app .bg-white:is(.rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl) :is(.text-slate-400, .text-slate-500, .text-zinc-500) {
+  color: #f1dbe2 !important;
+}
+
+.clay-app .clay-surface :is(.text-blue-400, .text-blue-500, .text-blue-600, .text-blue-700, .text-red-400, .text-red-500, .text-red-600, .text-red-700),
+.clay-app .bg-white:is(.rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl) :is(.text-blue-400, .text-blue-500, .text-blue-600, .text-blue-700, .text-red-400, .text-red-500, .text-red-600, .text-red-700) {
+  color: #ffc2ca !important;
+}
+
+.clay-app .clay-logo {
+  border-radius: 22%;
+  box-shadow: 5px 6px 12px #0905088a, -2px -2px 8px #8b48505c;
+}
+
+.clay-app :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea) {
+  background-color: #1b131b !important;
+  color: #fff7f8 !important;
+  border-color: #a35a69 !important;
+  box-shadow: inset 3px 3px 7px #09050885, inset -2px -2px 5px #6b465038;
+}
+
+.clay-app :is(input, textarea)::placeholder { color: #d0b1ba !important; }
+.clay-app select option { background: #1b131b; color: #fff7f8; }
+.clay-app :is(input, select, textarea):focus-visible,
+.clay-app :is(button, a):focus-visible {
+  outline: 2px solid #ff8591;
+  outline-offset: 2px;
+}
+
+.clay-app :is(.bg-blue-600, .bg-blue-700, .bg-red-600, .bg-red-700) {
+  background: linear-gradient(145deg, #f15362, #b91f34) !important;
+  color: #fff8f8 !important;
+  box-shadow: 5px 6px 12px #0905088c, inset 1px 1px 0 #ffffff4a, inset -2px -2px 5px #7e1425a6;
+}
+
+.clay-app :is(button, a):disabled {
+  background: #56303b !important;
+  color: #ead7dc !important;
+  opacity: 0.72 !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+}
+
+.clay-app :is(.hover\:bg-slate-50, .hover\:bg-slate-100, .hover\:bg-slate-200):hover {
+  background-color: #3c2730 !important;
+}
+
+.clay-app .hover\:bg-white:hover { background-color: #3f2531 !important; }
+
+.clay-app :is(.hover\:bg-blue-50, .hover\:bg-blue-100, .hover\:bg-red-50, .hover\:bg-red-100):hover {
+  background-color: #60303b !important;
+}
+
+.clay-app table { color: #f1dfe3; }
+.clay-app tbody tr { border-color: #463039; }
+.clay-app tbody tr:hover { background-color: #3a2530 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .clay-app *, .clay-app *::before, .clay-app *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* 58mm Bluetooth Thermal Printer Styles */
@@ -38,6 +217,22 @@ input, textarea, select {
     padding: 0 !important;
     width: 58mm !important;
     font-family: 'Courier New', Courier, monospace, sans-serif !important;
+  }
+
+  .clay-app :is(.thermal-receipt, .thermal-receipt *) {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-color: #000000 !important;
+    box-shadow: none !important;
+  }
+
+  .clay-app :is(.print-document, .print-document *, .print-backdrop),
+  .clay-app .print-document.bg-white,
+  .clay-app .print-document .bg-white {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-color: #d1d5db !important;
+    box-shadow: none !important;
   }
 
   header, nav, footer, .print-hidden {

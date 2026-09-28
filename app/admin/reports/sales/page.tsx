@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { browserDataClient } from '@/lib/browser-data-client';
 import { localDateStart, localDateEnd } from '@/lib/local-date';
 import { Loader2, Search, FileText, Printer, FileDown, Trash2 } from 'lucide-react';
-import { deleteTransaction } from '@/app/actions/transaction';
+import { deleteTransaction, deleteTransactions } from '@/app/actions/transaction';
 
 const supabase = browserDataClient;
 
 export default function AdminSalesReports() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   
@@ -45,6 +46,7 @@ export default function AdminSalesReports() {
 
   const fetchTransactions = async () => {
     setIsLoading(true);
+    setLoadError('');
     
     // Hitung range pagination
     const from = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -86,9 +88,12 @@ export default function AdminSalesReports() {
       setTransactions(data);
       if (count !== null) {
         setTotalItems(count);
-        setTotalPages(Math.ceil(count / ITEMS_PER_PAGE));
+        const pages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
+        setTotalPages(pages);
+        if (currentPage > pages) setCurrentPage(pages);
       }
     }
+    if (error) setLoadError(error.message);
     setIsLoading(false);
   };
 
@@ -118,25 +123,22 @@ export default function AdminSalesReports() {
       setTxToDelete(null);
       fetchTransactions(); // Refresh data
     } else {
-      alert(res.error || 'Gagal menghapus transaksi.');
+      alert(res.error || 'Gagal membatalkan transaksi.');
     }
   };
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
     setIsBulkDeleting(true);
-    let successCount = 0;
-    
-    for (const id of selectedIds) {
-      const res = await deleteTransaction(id, shouldRestoreStock);
-      if (res.success) successCount++;
-    }
+    const result = await deleteTransactions(selectedIds, shouldRestoreStock);
     
     setIsBulkDeleting(false);
     setShowBulkDeleteConfirm(false);
     setSelectedIds([]);
     
-    alert(`Berhasil menghapus ${successCount} transaksi secara permanen.`);
+    alert(result.success
+      ? `Berhasil membatalkan ${result.completed} transaksi.`
+      : `${result.completed} transaksi berhasil dibatalkan sebelum proses berhenti. ${result.error}`);
     fetchTransactions();
   };
 
@@ -163,6 +165,7 @@ export default function AdminSalesReports() {
 
   return (
     <div className="p-4 md:p-8 h-full relative flex flex-col">
+      {loadError && <div role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-red-700">Gagal memuat penjualan: {loadError} <button type="button" onClick={fetchTransactions} className="underline">Coba lagi</button></div>}
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-8 shrink-0">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-800">Riwayat Penjualan & Cetak</h1>
@@ -179,7 +182,7 @@ export default function AdminSalesReports() {
               </div>
               <input
                 type="text"
-                placeholder="Cari ID Transaksi atau Nama Toko..."
+                placeholder="Cari ID atau toko di halaman ini..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
@@ -238,9 +241,11 @@ export default function AdminSalesReports() {
                 </button>
                 <button 
                   onClick={() => setShowBulkDeleteConfirm(true)}
-                  className="px-4 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-2 ml-4"
+                  disabled={selectedIds.some(id => filteredTx.find(tx => tx.id === id)?.shifts?.status !== 'open')}
+                  title="Pembatalan hanya tersedia saat shift masih terbuka"
+                  className="px-4 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-2 ml-4"
                 >
-                  <Trash2 size={16} /> Hapus Terpilih
+                  <Trash2 size={16} /> Batalkan Terpilih
                 </button>
               </div>
             </div>
@@ -327,8 +332,9 @@ export default function AdminSalesReports() {
                         </button>
                         <button 
                           onClick={() => setTxToDelete(tx)}
-                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors tooltip-trigger"
-                          title="Hapus Transaksi (Void)"
+                          disabled={tx.shifts?.status !== 'open'}
+                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-30 rounded-lg transition-colors tooltip-trigger"
+                          title={tx.shifts?.status === 'open' ? 'Batalkan transaksi (void)' : 'Shift tertutup: perlu pemeriksaan manual'}
                         >
                           <Trash2 size={18} />
                         </button>
@@ -386,10 +392,9 @@ export default function AdminSalesReports() {
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
                 <Trash2 className="text-red-600" size={24} />
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Hapus Transaksi?</h3>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Batalkan Transaksi?</h3>
               <p className="text-slate-500 text-sm mb-4">
-                Anda yakin ingin menghapus transaksi <strong>{txToDelete.id.split('-')[0].toUpperCase()}</strong>?<br/><br/>
-                <span className="text-red-600 font-semibold">Peringatan:</span> Data yang dihapus <strong>TIDAK BISA DIKEMBALIKAN</strong>.
+                Batalkan transaksi <strong>{txToDelete.id.split('-')[0].toUpperCase()}</strong>? Riwayat tetap tersimpan dengan status void.
               </p>
 
               <label className="flex items-start gap-3 w-full text-left bg-slate-50 p-3 rounded-lg border border-slate-200 mb-6 cursor-pointer hover:bg-slate-100 transition-colors">
@@ -420,9 +425,9 @@ export default function AdminSalesReports() {
                   disabled={isDeleting}
                 >
                   {isDeleting ? (
-                    <><Loader2 size={18} className="animate-spin" /> Menghapus...</>
+                    <><Loader2 size={18} className="animate-spin" /> Membatalkan...</>
                   ) : (
-                    'Ya, Hapus Permanen'
+                    'Ya, Batalkan'
                   )}
                 </button>
               </div>
@@ -433,7 +438,7 @@ export default function AdminSalesReports() {
 
       {/* Modal Cetak (Print Preview) */}
       {selectedTx && printType && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 print:bg-white print:p-0 print:block">
+        <div className="print-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 print:bg-white print:p-0 print:block">
           
           <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden print:shadow-none print:max-h-none print:rounded-none">
             
@@ -455,7 +460,7 @@ export default function AdminSalesReports() {
             {/* Kertas Cetak */}
             <div className="flex-1 overflow-auto p-8 print:p-0 bg-slate-100 print:bg-white flex flex-col items-center">
               {(Array.isArray(selectedTx) ? selectedTx : [selectedTx]).map((tx, index, array) => (
-                <div key={tx.id} className={`bg-white p-8 border border-slate-200 shadow-sm print:border-none print:shadow-none w-full max-w-[21cm] min-h-[29.7cm] text-slate-900 print:min-h-0 mb-8 print:mb-0 ${index !== array.length - 1 ? 'print:break-after-page' : ''}`}>
+                <div key={tx.id} className={`print-document bg-white p-8 border border-slate-200 shadow-sm print:border-none print:shadow-none w-full max-w-[21cm] min-h-[29.7cm] text-slate-900 print:min-h-0 mb-8 print:mb-0 ${index !== array.length - 1 ? 'print:break-after-page' : ''}`}>
                   
                   {/* Kop Surat */}
                   <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-6">
@@ -559,10 +564,9 @@ export default function AdminSalesReports() {
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
                 <Trash2 className="text-red-600" size={24} />
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Hapus {selectedIds.length} Transaksi?</h3>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Batalkan {selectedIds.length} Transaksi?</h3>
               <p className="text-slate-500 text-sm mb-4">
-                Anda yakin ingin menghapus <strong>{selectedIds.length} transaksi</strong> sekaligus secara massal?<br/><br/>
-                <span className="text-red-600 font-semibold">Peringatan:</span> Data yang dihapus <strong>TIDAK BISA DIKEMBALIKAN</strong>.
+                Batalkan <strong>{selectedIds.length} transaksi</strong>? Riwayat tetap tersimpan dengan status void. Proses batch dapat berhasil sebagian bila salah satu transaksi ditolak.
               </p>
 
               <label className="flex items-start gap-3 w-full text-left bg-slate-50 p-3 rounded-lg border border-slate-200 mb-6 cursor-pointer hover:bg-slate-100 transition-colors">
@@ -593,9 +597,9 @@ export default function AdminSalesReports() {
                   disabled={isBulkDeleting}
                 >
                   {isBulkDeleting ? (
-                    <><Loader2 size={18} className="animate-spin" /> Menghapus...</>
+                    <><Loader2 size={18} className="animate-spin" /> Membatalkan...</>
                   ) : (
-                    'Ya, Hapus Permanen'
+                    'Ya, Batalkan'
                   )}
                 </button>
               </div>

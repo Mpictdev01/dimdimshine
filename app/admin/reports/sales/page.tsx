@@ -5,6 +5,7 @@ import { browserDataClient } from '@/lib/browser-data-client';
 import { localDateStart, localDateEnd } from '@/lib/local-date';
 import { Loader2, Search, FileText, Printer, FileDown, Trash2 } from 'lucide-react';
 import { deleteTransaction, deleteTransactions } from '@/app/actions/transaction';
+import { currentSession } from '@/app/actions/auth';
 
 const supabase = browserDataClient;
 
@@ -37,7 +38,13 @@ export default function AdminSalesReports() {
   // Untuk Modal Hapus
   const [txToDelete, setTxToDelete] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [shouldRestoreStock, setShouldRestoreStock] = useState(true);
+  const [shouldRestoreStock, setShouldRestoreStock] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    currentSession().then(actor => setIsSuperAdmin(actor?.role === 'super_admin'));
+  }, []);
 
   useEffect(() => {
     fetchTransactions();
@@ -56,6 +63,7 @@ export default function AdminSalesReports() {
       .from('transactions')
       .select(`
         *,
+        shifts(status),
         customers(name, address, phone),
         transaction_items(
           quantity, price,
@@ -121,9 +129,10 @@ export default function AdminSalesReports() {
     
     if (res.success) {
       setTxToDelete(null);
+      setDeleteError('');
       fetchTransactions(); // Refresh data
     } else {
-      alert(res.error || 'Gagal membatalkan transaksi.');
+      setDeleteError(res.error || 'Gagal membatalkan transaksi.');
     }
   };
 
@@ -147,6 +156,21 @@ export default function AdminSalesReports() {
     if (txsToPrint.length === 0) return;
     setSelectedTx(txsToPrint);
     setPrintType(type);
+  };
+
+  const selectedHaveClosedShift = selectedIds.some(id =>
+    transactions.find(tx => tx.id === id)?.shifts?.status !== 'open'
+  );
+
+  const openBulkDeleteConfirm = () => {
+    setShouldRestoreStock(false);
+    setShowBulkDeleteConfirm(true);
+  };
+
+  const openDeleteConfirm = (tx: (typeof transactions)[number]) => {
+    setShouldRestoreStock(false);
+    setDeleteError('');
+    setTxToDelete(tx);
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -240,9 +264,9 @@ export default function AdminSalesReports() {
                   <FileDown size={16} /> Cetak Multi Faktur
                 </button>
                 <button 
-                  onClick={() => setShowBulkDeleteConfirm(true)}
-                  disabled={selectedIds.some(id => filteredTx.find(tx => tx.id === id)?.shifts?.status !== 'open')}
-                  title="Pembatalan hanya tersedia saat shift masih terbuka"
+                  onClick={openBulkDeleteConfirm}
+                  disabled={!isSuperAdmin && selectedHaveClosedShift}
+                  title={!isSuperAdmin && selectedHaveClosedShift ? 'Hanya super admin dapat membatalkan transaksi dari shift tertutup' : 'Batalkan transaksi terpilih'}
                   className="px-4 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-2 ml-4"
                 >
                   <Trash2 size={16} /> Batalkan Terpilih
@@ -331,10 +355,10 @@ export default function AdminSalesReports() {
                           <FileDown size={18} />
                         </button>
                         <button 
-                          onClick={() => setTxToDelete(tx)}
-                          disabled={tx.shifts?.status !== 'open'}
+                          onClick={() => openDeleteConfirm(tx)}
+                          disabled={!isSuperAdmin && tx.shifts?.status !== 'open'}
                           className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-30 rounded-lg transition-colors tooltip-trigger"
-                          title={tx.shifts?.status === 'open' ? 'Batalkan transaksi (void)' : 'Shift tertutup: perlu pemeriksaan manual'}
+                          title={tx.shifts?.status === 'open' || isSuperAdmin ? 'Batalkan transaksi (void)' : 'Hanya super admin dapat membatalkan transaksi dari shift tertutup'}
                         >
                           <Trash2 size={18} />
                         </button>
@@ -397,6 +421,8 @@ export default function AdminSalesReports() {
                 Batalkan transaksi <strong>{txToDelete.id.split('-')[0].toUpperCase()}</strong>? Riwayat tetap tersimpan dengan status void.
               </p>
 
+              {deleteError && <p role="alert" className="w-full mb-4 rounded-lg border border-red-500/40 bg-red-950/30 p-3 text-left text-sm font-medium text-red-100">{deleteError}</p>}
+
               <label className="flex items-start gap-3 w-full text-left bg-slate-50 p-3 rounded-lg border border-slate-200 mb-6 cursor-pointer hover:bg-slate-100 transition-colors">
                 <input 
                   type="checkbox" 
@@ -407,7 +433,7 @@ export default function AdminSalesReports() {
                 />
                 <span className="text-sm text-slate-700">
                   <strong>Kembalikan Stok Barang</strong><br/>
-                  Centang opsi ini jika Anda ingin stok barang pada transaksi ini dikembalikan (ditambahkan) ke dalam gudang secara otomatis.
+                  Centang hanya jika riwayat pemakaian stok transaksi lengkap. Untuk riwayat lama yang tidak lengkap, biarkan kosong dan periksa stok secara manual.
                 </span>
               </label>
               
@@ -579,7 +605,7 @@ export default function AdminSalesReports() {
                 />
                 <span className="text-sm text-slate-700">
                   <strong>Kembalikan Stok Barang</strong><br/>
-                  Centang opsi ini jika Anda ingin stok barang pada {selectedIds.length} transaksi ini dikembalikan ke dalam gudang secara otomatis.
+                  Centang hanya jika riwayat pemakaian stok semua transaksi lengkap. Untuk riwayat lama yang tidak lengkap, biarkan kosong dan periksa stok secara manual.
                 </span>
               </label>
               

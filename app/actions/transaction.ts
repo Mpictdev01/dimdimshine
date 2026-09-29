@@ -5,6 +5,18 @@ import { requireRole } from '@/lib/server/session';
 
 type SaleItem = { productId: string; quantity: number };
 
+function actionErrorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error
+    ? error.message
+    : error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+      ? error.message
+      : '';
+  if (/shift sudah ditutup/i.test(message)) {
+    return 'Pembatalan transaksi dari shift tertutup belum aktif di database. Migrasi fungsi void perlu diterapkan oleh pengelola sistem.';
+  }
+  return message || fallback;
+}
+
 function cleanItems(items: unknown): { product_id: string; quantity: number }[] {
   if (!Array.isArray(items) || items.length < 1 || items.length > 100) throw new Error('Keranjang tidak valid');
   return items.map((item: SaleItem) => {
@@ -58,12 +70,14 @@ export async function deleteTransaction(txId: string, shouldRestoreStock = true)
       .select('shift_id,shifts(status)').eq('id', txId).single();
     if (lookupError) throw lookupError;
     const shift = Array.isArray(transaction.shifts) ? transaction.shifts[0] : transaction.shifts;
-    if (shift?.status !== 'open') throw new Error('Shift sudah ditutup. Pembatalan transaksi ini perlu pemeriksaan manual.');
+    if (shift?.status !== 'open' && actor.role !== 'super_admin') {
+      throw new Error('Hanya super admin yang dapat membatalkan transaksi dari shift tertutup.');
+    }
     const { error } = await db().rpc('pos_void_sale', { p_tx_id: txId, p_actor_id: actor.userId, p_restore_stock: shouldRestoreStock });
     if (error) throw error;
     return { success: true as const };
   } catch (error) {
-    return { success: false as const, error: error instanceof Error ? error.message : 'Gagal membatalkan transaksi' };
+    return { success: false as const, error: actionErrorMessage(error, 'Gagal membatalkan transaksi') };
   }
 }
 
@@ -81,6 +95,6 @@ export async function deleteTransactions(txIds: string[], shouldRestoreStock = t
     }
     return { success: true as const, completed };
   } catch (error) {
-    return { success: false as const, completed: 0, error: error instanceof Error ? error.message : 'Gagal membatalkan transaksi' };
+    return { success: false as const, completed: 0, error: actionErrorMessage(error, 'Gagal membatalkan transaksi') };
   }
 }

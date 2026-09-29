@@ -6,6 +6,7 @@ import { localDateStart, localDateEnd, localDateInput } from '@/lib/local-date';
 import { Loader2, Search, Download, Filter, FileSpreadsheet, Trash2, X, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { deleteTransactions } from '@/app/actions/transaction';
+import { currentSession } from '@/app/actions/auth';
 
 const supabase = browserDataClient;
 
@@ -23,7 +24,8 @@ export default function RecapReportPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [revertStock, setRevertStock] = useState(true);
+  const [revertStock, setRevertStock] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   // Filter States
   const [startDate, setStartDate] = useState('');
@@ -35,6 +37,7 @@ export default function RecapReportPage() {
   useEffect(() => {
     fetchMasterData();
     fetchTransactions();
+    currentSession().then(actor => setIsSuperAdmin(actor?.role === 'super_admin'));
   }, []);
 
   useEffect(() => {
@@ -60,6 +63,7 @@ export default function RecapReportPage() {
         .from('transactions')
         .select(`
           *,
+          shifts(status),
           customers(name),
           transaction_items(
             product_id, quantity, price,
@@ -172,6 +176,15 @@ export default function RecapReportPage() {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
+  };
+
+  const selectedHaveClosedShift = selectedIds.some(id =>
+    transactions.find(tx => tx.id === id)?.shifts?.status !== 'open'
+  );
+
+  const openDeleteModal = () => {
+    setRevertStock(false);
+    setShowDeleteModal(true);
   };
 
   const handleDelete = async () => {
@@ -397,9 +410,9 @@ export default function RecapReportPage() {
             <span className="font-medium">Transaksi Terpilih</span>
           </div>
           <button 
-            onClick={() => setShowDeleteModal(true)}
-            disabled={selectedIds.some(id => filteredTx.find(tx => tx.id === id)?.shifts?.status !== 'open')}
-            title="Pembatalan hanya tersedia saat shift masih terbuka"
+            onClick={openDeleteModal}
+            disabled={!isSuperAdmin && selectedHaveClosedShift}
+            title={!isSuperAdmin && selectedHaveClosedShift ? 'Hanya super admin dapat membatalkan transaksi dari shift tertutup' : 'Batalkan transaksi terpilih'}
             className="flex items-center gap-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors font-medium text-sm"
           >
             <Trash2 size={16} /> Batalkan Terpilih
@@ -436,7 +449,7 @@ export default function RecapReportPage() {
                 <div>
                   <div className="font-semibold text-slate-700 text-sm">Kembalikan stok produk?</div>
                   <div className="text-xs text-slate-500 mt-0.5">
-                    Stok barang yang ada di dalam nota tersebut akan ditambahkan kembali secara otomatis ke gudang/master produk. (Direkomendasikan)
+                    Stok akan dikembalikan jika riwayat pemakaian stok semua nota lengkap. Untuk riwayat lama yang tidak lengkap, biarkan kosong dan periksa stok secara manual.
                   </div>
                 </div>
               </label>

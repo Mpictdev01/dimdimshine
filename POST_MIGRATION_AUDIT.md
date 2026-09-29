@@ -85,3 +85,6 @@ Komponen `CustomerModal` masih ada, tetapi tidak dipakai oleh halaman POS saat i
 ## Batas bukti
 
 Pemeriksaan ini bukan bukti bahwa setiap tombol berfungsi di deployment. Tidak ada kredensial uji yang digunakan dan tidak ada transaksi yang dibuat. Status “terbukti pada kode” harus ditutup dengan pengujian browser staging dan data uji sebelum dinyatakan selesai.
+# Catatan tindak lanjut 29 September 2026
+
+Perbaikan void untuk shift tertutup telah disiapkan di `supabase/migrations/202609290001_super_admin_void_closed_shifts.sql` beserta pembatasan role pada Server Action dan UI. Migrasi belum diterapkan pada database live; temuan di atas tetap menggambarkan kondisi live yang diperiksa sebelumnya. Setelah migrasi, super admin dapat melakukan void meski shift tertutup, sedangkan manager tetap hanya pada shift terbuka.

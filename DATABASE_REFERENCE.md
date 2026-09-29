@@ -6,7 +6,7 @@ Snapshot baca saja: 28 September 2026 sekitar 16.18 ICT. Jumlah baris bisa berub
 
 - Aplikasi memakai Supabase PostgreSQL. Browser memanggil `/api/data/[table]` dan Server Actions; server memakai `SUPABASE_SECRET_KEY`. Tidak ada Supabase secret yang diperlukan di browser.
 - Terdapat 20 tabel aplikasi di `public`. Semua tabel itu memiliki RLS aktif; tidak ada policy `public` dan role `anon` tidak memiliki hak `SELECT` menurut pemeriksaan katalog. Semua fungsi `pos_*` yang ditemukan berjenis `SECURITY DEFINER` dan tidak dapat dieksekusi langsung oleh `anon` atau `authenticated`.
-- Dua berkas migrasi lokal: `supabase/migrations/202609260001_secure_access.sql` (hash PIN, sesi, shift, penguncian akses) dan `202609260002_atomic_operations.sql` (penawaran, penjualan, stok, pembelian, pengeluaran). `supabase/cutover/lock_down_anon.sql` menutup shift lama, menghapus kolom PIN lama, dan mencabut akses anon. `fix_login_ambiguous.sql` mengganti fungsi login yang sebelumnya ambigu; definisi live sudah menggunakan alias `u` pada pencarian user.
+- Migrasi lokal mencakup `202609260001_secure_access.sql` (hash PIN, sesi, shift, penguncian akses), `202609260002_atomic_operations.sql` (penawaran, penjualan, stok, pembelian, pengeluaran), dan `202609290001_super_admin_void_closed_shifts.sql` (void shift tertutup khusus super admin). Migrasi terakhir perlu diterapkan ke database agar UI dan Server Action baru dapat bekerja. `supabase/cutover/lock_down_anon.sql` menutup shift lama, menghapus kolom PIN lama, dan mencabut akses anon. `fix_login_ambiguous.sql` mengganti fungsi login yang sebelumnya ambigu; definisi live sudah menggunakan alias `u` pada pencarian user.
 - Konektor mengembalikan daftar migrasi kosong dan `supabase_migrations.schema_migrations` tidak ada. Skema live memperlihatkan efek SQL, tetapi tidak membuktikan entri riwayat migrasi ataupun urutan penerapannya. Sebelum perubahan berikutnya, catat baseline skema dan pilih satu mekanisme riwayat migrasi yang konsisten.
 
 ## Tabel dan isi saat snapshot
@@ -40,7 +40,7 @@ Kolom penting:
 | `pos_open_shift` | `app/actions/shift.ts` | buka satu shift dengan kas awal 0 |
 | `pos_close_shift` | tidak dipakai alur POS baru | fungsi lama untuk tutup dengan kas fisik; dipertahankan agar tidak mengubah riwayat/fungsi live |
 | `pos_quote`, `pos_quote_json`, `pos_create_sale` | `app/actions/transaction.ts` | harga server, hash quote, stok terkunci, idempotensi, penjualan atomik |
-| `pos_void_sale` | `app/actions/transaction.ts` | void hanya untuk shift open; pemulihan stok dari usage |
+| `pos_void_sale` | `app/actions/transaction.ts` | manager: void shift open; super admin: void shift open/closed; pemulihan stok dari usage lengkap |
 | `pos_create_purchase` | `app/actions/purchase.ts` | pembelian atomik dan stok bertambah |
 | `pos_adjust_stock`, `pos_delete_adjustments` | `app/actions/inventory.ts` | penyesuaian/pembalikan stok |
 | `pos_create_expense`, `pos_delete_expense` | `app/actions/expense.ts` | pengeluaran pada shift open |
@@ -61,7 +61,7 @@ Jangan memanggil fungsi mutasi untuk “menguji” database produksi. Lakukan pe
 
 ## Aturan integritas dan batas historis
 
-Fungsi penjualan baru mengunci baris shift, produk, bahan, dan pengaturan; memvalidasi stok; menyimpan penjualan/item/usage; lalu mengurangi stok dalam satu transaksi database. Resep BOM mengurangi bahan, sedangkan produk tanpa resep mengurangi stok produk. Transaksi lama dapat tidak mempunyai `sale_stock_usage`. `pos_void_sale` menolak pemulihan stok historis yang tidak mempunyai usage dan menolak void setelah shift ditutup. Aturan ini melindungi rekonsiliasi; antarmuka dan prosedur koreksi perlu menyesuaikannya.
+Fungsi penjualan baru mengunci baris shift, produk, bahan, dan pengaturan; memvalidasi stok; menyimpan penjualan/item/usage; lalu mengurangi stok dalam satu transaksi database. Resep BOM mengurangi bahan, sedangkan produk tanpa resep mengurangi stok produk. Transaksi lama dapat tidak mempunyai `sale_stock_usage`. Setelah migrasi `202609290001`, super admin dapat melakukan void meski shift tertutup; manager tetap hanya pada shift terbuka. Riwayat tetap tersimpan dengan status `void`, waktu, dan pelaku. Opsi pemulihan stok ditolak jika ada item tanpa usage; batalkan tanpa pemulihan lalu periksa stok secara manual. Hasil rekap penjualan mengecualikan transaksi void.
 
 ## Query audit baca saja
 

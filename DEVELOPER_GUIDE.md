@@ -1,6 +1,6 @@
 # Panduan pengembang DIMDIM SHINE
 
-Diperbarui 28 September 2026 berdasarkan source saat ini dan inspeksi database baca saja. `graphify-out/GRAPH_REPORT.md` bertanggal 27 Juli dan menggambarkan arsitektur lama; gunakan source dan dokumen ini untuk pekerjaan pascamigrasi.
+Diperbarui 29 September 2026 berdasarkan source saat ini dan inspeksi database baca saja. `graphify-out/GRAPH_REPORT.md` bertanggal 27 Juli dan menggambarkan arsitektur lama; gunakan source dan dokumen ini untuk pekerjaan pascamigrasi. Migrasi void shift tertutup masih menunggu penerapan pada database live.
 
 ## Teknologi dan batas sistem
 
@@ -84,6 +84,8 @@ Checkout baru selalu menyimpan `order_type='sale'`, `customer_id=null`, `payment
 | `employees.ts` | simpan/nonaktifkan akun | `pos_save_user`, `pos_deactivate_user` |
 
 Semua aksi mutasi kritis memeriksa role di server. Fungsi database tidak boleh dipanggil dari browser langsung. Rincian tabel, kolom, fungsi, dan kondisi data ada di [DATABASE_REFERENCE.md](DATABASE_REFERENCE.md).
+
+Void penjualan memakai status `void` dengan `voided_at` dan `voided_by`, bukan menghapus baris transaksi. Manager hanya dapat membatalkan transaksi dari shift terbuka; super admin dapat membatalkan transaksi dari shift terbuka atau tertutup setelah migrasi `202609290001_super_admin_void_closed_shifts.sql` diterapkan. Opsi pemulihan stok tidak dicentang secara bawaan dan harus dipilih secara sadar. Bila riwayat pemakaian stok per item tidak lengkap, fungsi menolak pemulihan stok; ulangi tanpa pemulihan dan lakukan pemeriksaan stok manual.
 
 ## Panduan kerja dan verifikasi
 

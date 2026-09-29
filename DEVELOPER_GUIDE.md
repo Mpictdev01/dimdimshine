@@ -47,6 +47,7 @@ Proxy `app/api/data/[table]/route.ts` hanya menerima tabel terdaftar dan hanya m
 | `/admin/inventory/purchases` | Pembelian produk langsung / bahan | `app/admin/inventory/purchases/page.tsx` |
 | `/admin/inventory/suppliers` | CRUD supplier | `app/admin/inventory/suppliers/page.tsx` |
 | `/admin/inventory/adjustments` | Penyesuaian stok | `app/admin/inventory/adjustments/page.tsx` |
+| `/admin/inventory/stock-requests` | Persetujuan/penolakan stok bahan dari kasir (super admin) | `app/admin/inventory/stock-requests/page.tsx` |
 | `/admin/reports` | Alihkan ke riwayat penjualan | `app/admin/reports/page.tsx` |
 | `/admin/reports/sales` | Riwayat, filter, cetak, void | `app/admin/reports/sales/page.tsx` |
 | `/admin/reports/recap` | Rekap, ekspor, void batch | `app/admin/reports/recap/page.tsx` |
@@ -79,6 +80,7 @@ Checkout baru selalu menyimpan `order_type='sale'`, `customer_id=null`, `payment
 | `expense.ts` | buat/hapus pengeluaran | `pos_create_expense`, `pos_delete_expense` |
 | `purchase.ts` | pembelian | `pos_create_purchase` |
 | `inventory.ts` | penyesuaian / pembalikan | `pos_adjust_stock`, `pos_delete_adjustments` |
+| `ingredient-stock-requests.ts` | pengajuan kasir, antrean/keputusan super admin, riwayat stok | `ingredient_stock_requests`, `pos_request_ingredient_stock`, `pos_review_ingredient_stock_request` |
 | `products.ts` | simpan/hapus produk | `pos_save_product`, `pos_delete_products` |
 | `ingredients.ts` | simpan/hapus bahan | `pos_save_ingredient`, `pos_delete_ingredient` |
 | `employees.ts` | simpan/nonaktifkan akun | `pos_save_user`, `pos_deactivate_user` |
@@ -86,6 +88,8 @@ Checkout baru selalu menyimpan `order_type='sale'`, `customer_id=null`, `payment
 Semua aksi mutasi kritis memeriksa role di server. Fungsi database tidak boleh dipanggil dari browser langsung. Rincian tabel, kolom, fungsi, dan kondisi data ada di [DATABASE_REFERENCE.md](DATABASE_REFERENCE.md).
 
 Void penjualan memakai status `void` dengan `voided_at` dan `voided_by`, bukan menghapus baris transaksi. Manager hanya dapat membatalkan transaksi dari shift terbuka; super admin dapat membatalkan transaksi dari shift terbuka atau tertutup setelah migrasi `202609290001_super_admin_void_closed_shifts.sql` diterapkan. Opsi pemulihan stok tidak dicentang secara bawaan dan harus dipilih secara sadar. Bila riwayat pemakaian stok per item tidak lengkap, fungsi menolak pemulihan stok; ulangi tanpa pemulihan dan lakukan pemeriksaan stok manual.
+
+Kasir dengan shift terbuka memakai menu **Tambahkan Stok** di POS untuk mengajukan bahan dalam satuan beli dan menulis catatan sumber stok. Pengajuan tidak mengubah `ingredients.current_stock`. Super admin saja yang dapat melihat antrean dan menyetujui/menolak di `/admin/inventory/stock-requests`; persetujuan menambah stok secara atomik dan masuk Riwayat Stok. Penolakan mewajibkan alasan. Jumlah hasil konversi dibekukan pada saat pengajuan dan persetujuan ditolak bila satuan hasil berubah sebelum diputuskan. Katalog POS memperbarui stok tiap 60 detik saat terlihat. Fitur memerlukan migrasi `202609290002_ingredient_stock_approval.sql` sebelum kode aplikasi dijalankan; fitur ini tidak otomatis mencatat pengeluaran atau harga pembelian.
 
 ## Panduan kerja dan verifikasi
 

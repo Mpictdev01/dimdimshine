@@ -42,6 +42,7 @@ const menuItems = [
       { name: 'Pembelian (Barang Masuk)', path: '/admin/inventory/purchases' },
       { name: 'Data Supplier', path: '/admin/inventory/suppliers' },
       { name: 'Penyesuaian Stok', path: '/admin/inventory/adjustments' },
+      { name: 'Persetujuan Stok Kasir', path: '/admin/inventory/stock-requests' },
     ]
   },
   { 
@@ -222,7 +223,7 @@ export default function Sidebar() {
                 >
                   <div className="overflow-hidden">
                     <div className="ml-9 flex flex-col gap-1">
-                      {item.subItems?.map(subItem => {
+                      {item.subItems?.filter(subItem => subItem.path !== '/admin/inventory/stock-requests' || isSuperAdmin).map(subItem => {
                         const isSubActive = pathname === subItem.path || pathname.startsWith(`${subItem.path}/`);
                         return (
                           <Link

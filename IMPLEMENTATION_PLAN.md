@@ -14,6 +14,7 @@ Disusun 28 September 2026 dari audit kode dan database baca saja. **Status: impl
 | Pelanggan/area | Masuk sidebar | Uji navigasi desktop/mobile dan akses langsung |
 | Dropdown login | POS hanya menampilkan kasir aktif; admin hanya menampilkan manager/super admin aktif | Uji tampilan browser untuk setiap role di staging |
 | Kas awal/akhir shift | Form kas awal dan input kas fisik dihapus; buka shift mencatat awal 0, tutup shift menyimpan kas akhir/harapan/selisih null | Uji buka/tutup shift dan penolakan tutup ganda di staging |
+| Pengajuan stok kasir | Menu POS, Server Actions, antrean super admin, ledger stok, dan migrasi `202609290002` disiapkan; stok hanya berubah saat disetujui | Terapkan migrasi pada staging lalu uji kasir, manager, super admin, dua persetujuan bersamaan, penolakan, dan konversi satuan |
 
 Pemeriksaan lokal: `npx tsc --noEmit` dan `npm run build` lulus; ESLint untuk Server Actions dan proxy yang diubah lulus. `npm run lint` seluruh repo masih gagal dengan 96 error/14 warning; baseline sebelum perubahan 106 error/15 warning. HTTP lokal tanpa sesi: GET proxy data 401; POST/PATCH/DELETE proxy data 405; URL lama `/admin/receivables` mengalihkan tamu ke login (307), sementara rutenya tidak ada dalam hasil build. Seluruh pengujian mutasi memerlukan database staging terpisah; data produksi belum diubah.
 

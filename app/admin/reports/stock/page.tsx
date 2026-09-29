@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { browserDataClient as db } from '@/lib/browser-data-client';
 import { localDateEnd, localDateStart } from '@/lib/local-date';
+import { approvedIngredientStockMovements } from '@/app/actions/ingredient-stock-requests';
 
 type StockItem = { id: string; name: string; stock: number; unit: string; yield: number; kind: 'product' | 'ingredient' };
 type Movement = { id: string; date: string; itemId: string; direction: 'IN' | 'OUT';
@@ -20,6 +21,7 @@ type TransactionItem = { id: string; product_id: string; quantity: number;
   transactions: Relation<{ id: string; created_at: string; payment_status: string }> };
 type Adjustment = { id: string; product_id: string | null; ingredient_id: string | null;
   difference: number; reason: string; created_at: string };
+type ApprovedStockRequest = { id: string; ingredient_id: string; quantity_stock: number; reviewed_at: string };
 
 function one<T>(value: Relation<T>): T | null { return Array.isArray(value) ? value[0] ?? null : value; }
 
@@ -37,19 +39,28 @@ export default function AdminStockReport() {
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    const queries = await Promise.all([
-      db.from('products').select('id,name,stock,units(name),product_ingredients(ingredient_id)'),
-      db.from('ingredients').select('id,name,current_stock,yield_quantity,yield_unit,unit'),
-      db.from('purchase_items').select('id,product_id,ingredient_id,qty,purchases(id,created_at,suppliers(name))'),
-      db.from('sale_stock_usage').select('id,product_id,ingredient_id,quantity,transaction_items(id,transaction_id,transactions(id,created_at,payment_status))'),
-      db.from('stock_adjustments').select('id,product_id,ingredient_id,difference,reason,created_at'),
-      db.from('transaction_items').select('id,product_id,quantity,transactions(id,created_at,payment_status)'),
-    ]);
+    let queries;
+    try {
+      queries = await Promise.all([
+        db.from('products').select('id,name,stock,units(name),product_ingredients(ingredient_id)'),
+        db.from('ingredients').select('id,name,current_stock,yield_quantity,yield_unit,unit'),
+        db.from('purchase_items').select('id,product_id,ingredient_id,qty,purchases(id,created_at,suppliers(name))'),
+        db.from('sale_stock_usage').select('id,product_id,ingredient_id,quantity,transaction_items(id,transaction_id,transactions(id,created_at,payment_status))'),
+        db.from('stock_adjustments').select('id,product_id,ingredient_id,difference,reason,created_at'),
+        db.from('transaction_items').select('id,product_id,quantity,transactions(id,created_at,payment_status)'),
+        approvedIngredientStockMovements().then(data => ({ data, error: null })),
+      ]);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Gagal memuat persetujuan stok.');
+      setLoading(false);
+      return;
+    }
     const failure = queries.find(query => query.error)?.error;
     if (failure) { setError(failure.message); setLoading(false); return; }
 
-    const [products, ingredients, purchases, usages, adjustments, saleItems] = queries.map(query => query.data ?? []) as
+    const [products, ingredients, purchases, usages, adjustments, saleItems] = queries.slice(0, 6).map(query => query.data ?? []) as
       [Product[], Ingredient[], PurchaseItem[], Usage[], Adjustment[], TransactionItem[]];
+    const approvedRequests = (queries[6].data ?? []) as ApprovedStockRequest[];
     const stockItems: StockItem[] = [
       ...products.filter(product => !product.product_ingredients?.length).map(product => ({
         id: product.id, name: product.name, stock: Number(product.stock),
@@ -97,6 +108,13 @@ export default function AdminStockReport() {
         direction: adjustment.difference > 0 ? 'IN' : 'OUT',
         quantity: Math.abs(Number(adjustment.difference)) * target.yield,
         source: 'Penyesuaian', reference: adjustment.reason });
+    }
+    for (const request of approvedRequests) {
+      const target = itemMap.get(request.ingredient_id);
+      if (!target || !request.reviewed_at) continue;
+      rows.push({ id: `cashier-stock-${request.id}`, date: request.reviewed_at, itemId: target.id,
+        direction: 'IN', quantity: Number(request.quantity_stock),
+        source: 'Persetujuan stok kasir', reference: request.id });
     }
     setItems(stockItems);
     setMovements(rows.sort((a, b) => Date.parse(b.date) - Date.parse(a.date)));

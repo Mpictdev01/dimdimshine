@@ -9,7 +9,8 @@ import Cart from '@/app/components/pos/Cart';
 import ReportModal from '@/app/components/pos/ReportModal';
 import ExpenseModal from '@/app/components/pos/ExpenseModal';
 import IngredientsStockModal from '@/app/components/pos/IngredientsStockModal';
-import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X, FileText, Wallet, Boxes, Menu } from 'lucide-react';
+import IngredientStockRequestModal from '@/app/components/pos/IngredientStockRequestModal';
+import { Search, Loader2, LogOut, UserCircle, ShoppingBag, X, FileText, Wallet, Boxes, Menu, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import { closeShift } from '@/app/actions/shift';
 import { logoutAccount } from '@/app/actions/auth';
@@ -31,6 +32,7 @@ export default function PosPage() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showIngredientsModal, setShowIngredientsModal] = useState(false);
+  const [showStockRequestModal, setShowStockRequestModal] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [animateCart, setAnimateCart] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -109,6 +111,14 @@ export default function PosPage() {
 
   }, [currentShift, router, reload]);
 
+  useEffect(() => {
+    if (!currentShift) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') setReload(value => value + 1);
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [currentShift]);
+
   const cartItemsCount = cart.reduce((total, item) => total + item.quantity, 0);
   const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
@@ -169,7 +179,7 @@ export default function PosPage() {
       <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
         
         {/* Top Controls: Search & Profil */}
-        <div className="p-4 bg-white border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-3 md:gap-6 shrink-0">
+        <div className="p-4 bg-white border-b border-slate-100 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-6 shrink-0">
           <div className="w-full md:flex-1 relative max-w-xl flex items-center gap-2">
             <div className="relative flex-1">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -188,7 +198,7 @@ export default function PosPage() {
             {/* Tombol Hamburger Menu Mobile */}
             <button
               onClick={() => setShowMobileNav(true)}
-              className="md:hidden flex items-center justify-center p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl border border-slate-200 shrink-0 transition-colors"
+              className="lg:hidden flex items-center justify-center p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl border border-slate-200 shrink-0 transition-colors"
               title="Menu Navigasi POS"
             >
               <Menu size={22} />
@@ -196,7 +206,7 @@ export default function PosPage() {
           </div>
 
           {/* Controls Desktop (md ke atas) */}
-          <div className="hidden md:flex items-center gap-3 w-auto justify-end">
+          <div className="hidden lg:flex items-center gap-3 w-auto justify-end">
             <div className="flex items-center gap-2 text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 shrink-0">
               <UserCircle size={18} className="text-blue-500 shrink-0" />
               <span className="font-semibold text-xs sm:text-sm whitespace-nowrap">Sales: {currentShift.cashierName}</span>
@@ -209,6 +219,13 @@ export default function PosPage() {
               >
                 <Boxes size={16} className="shrink-0 text-emerald-600" />
                 <span>Stok Bahan</span>
+              </button>
+              <button
+                onClick={() => setShowStockRequestModal(true)}
+                className="flex items-center justify-center gap-2 rounded-xl border border-red-200/60 bg-red-50 px-3.5 py-2.5 text-xs font-semibold text-red-700 shadow-xs transition-all hover:bg-red-100 active:scale-95 sm:text-sm"
+              >
+                <Plus size={16} className="shrink-0" />
+                <span>Tambah Stok</span>
               </button>
               <button 
                 onClick={() => setShowExpenseModal(true)}
@@ -346,10 +363,17 @@ export default function PosPage() {
         <IngredientsStockModal onClose={() => setShowIngredientsModal(false)} />
       )}
 
+      {showStockRequestModal && (
+        <IngredientStockRequestModal shiftId={currentShift.id} onClose={() => {
+          setShowStockRequestModal(false);
+          setReload(value => value + 1);
+        }} />
+      )}
+
       {/* Slide-over Navbar Drawer Mobile (Smooth CSS Transitions) */}
       <div 
         className={clsx(
-          "fixed inset-0 z-[90] md:hidden transition-all duration-300 ease-in-out",
+          "fixed inset-0 z-[90] lg:hidden transition-all duration-300 ease-in-out",
           showMobileNav ? "opacity-100 visible pointer-events-auto" : "opacity-0 invisible pointer-events-none"
         )}
       >
@@ -397,6 +421,17 @@ export default function PosPage() {
                 <Boxes size={18} />
               </div>
               <span>Stok Bahan Baku</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowStockRequestModal(true);
+                setShowMobileNav(false);
+              }}
+              className="clay-action-card flex w-full items-center gap-3 rounded-xl p-3.5 text-sm font-semibold transition-all active:scale-[0.98]"
+            >
+              <div className="rounded-lg bg-red-700 p-2 text-white shadow-sm"><Plus size={18} /></div>
+              <span>Tambahkan Stok</span>
             </button>
 
             <button

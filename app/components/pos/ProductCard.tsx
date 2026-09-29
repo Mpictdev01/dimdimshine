@@ -2,6 +2,7 @@
 
 import { usePosStore } from '@/lib/store/usePosStore';
 import { Plus } from 'lucide-react';
+import { formatIngredientShortages, type IngredientShortage } from '@/lib/product-availability';
 
 interface ProductCardProps {
   product: {
@@ -12,6 +13,7 @@ interface ProductCardProps {
     units?: { name: string };
     stock?: number;
     rawStockInfo?: string;
+    ingredientShortages?: IngredientShortage[];
   };
 }
 
@@ -37,7 +39,8 @@ export default function ProductCard({ product }: ProductCardProps) {
   };
 
   return (
-    <button type="button"
+    <div className="w-full">
+      <button type="button"
       onClick={handleAdd}
       disabled={!product.stock || product.stock <= 0}
       aria-label={`Tambah ${product.name} ke keranjang`}
@@ -65,6 +68,12 @@ export default function ProductCard({ product }: ProductCardProps) {
           <Plus size={18} className="sm:w-5 sm:h-5" />
         </span>
       </div>
-    </button>
+      </button>
+      {!!product.ingredientShortages?.length && (
+        <p className="mt-1 break-words rounded-xl border border-red-400/60 bg-red-950/70 px-3 py-2 text-sm font-semibold text-white">
+          Habis: {formatIngredientShortages(product.ingredientShortages)}
+        </p>
+      )}
+    </div>
   );
 }

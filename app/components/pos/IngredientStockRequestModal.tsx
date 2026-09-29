@@ -15,9 +15,25 @@ type Ingredient = {
   yield_unit: string | null;
   yield_quantity: number;
   current_stock: number;
+  min_stock_alert: number | null;
 };
 
 const statusText = { pending: 'Menunggu persetujuan', approved: 'Disetujui', rejected: 'Ditolak' };
+const stockFormatter = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 });
+const purchaseFormatter = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 4 });
+
+function stockLevel(ingredient: Ingredient) {
+  const stock = Number(ingredient.current_stock ?? 0);
+  if (stock <= 0) return 0;
+  const minimum = Number(ingredient.min_stock_alert ?? 0) * Number(ingredient.yield_quantity || 1);
+  return stock <= minimum ? 1 : 2;
+}
+
+function stockOptionLabel(ingredient: Ingredient) {
+  const status = stockLevel(ingredient) === 0 ? '[HABIS] ' : stockLevel(ingredient) === 1 ? '[MENIPIS] ' : '';
+  const unit = ingredient.yield_unit || ingredient.unit || 'unit';
+  return `${status}${ingredient.name} — stok ${stockFormatter.format(Number(ingredient.current_stock ?? 0))} ${unit}`;
+}
 
 export default function IngredientStockRequestModal({ shiftId, onClose }: {
   shiftId: string;
@@ -40,7 +56,7 @@ export default function IngredientStockRequestModal({ shiftId, onClose }: {
     try {
       const [ingredientResult, ownRequests] = await Promise.all([
         browserDataClient.from('ingredients')
-          .select('id,name,unit,yield_unit,yield_quantity,current_stock').order('name'),
+          .select('id,name,unit,yield_unit,yield_quantity,current_stock,min_stock_alert').order('name'),
         myIngredientStockRequests(),
       ]);
       if (ingredientResult.error) throw ingredientResult.error;
@@ -59,6 +75,9 @@ export default function IngredientStockRequestModal({ shiftId, onClose }: {
     () => ingredients.find(ingredient => ingredient.id === ingredientId),
     [ingredients, ingredientId],
   );
+  const sortedIngredients = useMemo(() => [...ingredients].sort((a, b) =>
+    stockLevel(a) - stockLevel(b) || a.name.localeCompare(b.name, 'id')),
+  [ingredients]);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -113,13 +132,19 @@ export default function IngredientStockRequestModal({ shiftId, onClose }: {
                 onChange={event => { setIngredientId(event.target.value); requestKey.current = null; }}
                 className="w-full rounded-xl border border-slate-400 px-3 py-3 text-sm">
                 <option value="">Pilih bahan</option>
-                {ingredients.map(ingredient => <option key={ingredient.id} value={ingredient.id}>{ingredient.name}</option>)}
+                {sortedIngredients.map(ingredient => <option key={ingredient.id} value={ingredient.id}>{stockOptionLabel(ingredient)}</option>)}
               </select>
+              <p className="mt-1 text-xs text-slate-200">Bahan habis dan menipis ditampilkan paling atas.</p>
             </div>
-            {selectedIngredient && <p className="rounded-xl bg-slate-900 p-3 text-sm text-white">
-              Stok saat ini: <strong>{new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(Number(selectedIngredient.current_stock) / Number(selectedIngredient.yield_quantity || 1))} {selectedIngredient.unit || 'unit'}</strong>
-              {' · '}1 {selectedIngredient.unit || 'unit'} = {selectedIngredient.yield_quantity} {selectedIngredient.yield_unit || selectedIngredient.unit || 'unit'}
-            </p>}
+            {selectedIngredient && <div className={`rounded-xl border p-3 text-sm text-white ${stockLevel(selectedIngredient) < 2 ? 'border-red-400/60 bg-red-950/60' : 'border-white/20 bg-slate-900'}`}>
+              {stockLevel(selectedIngredient) < 2 && <strong className="mb-1 block text-red-200">
+                {stockLevel(selectedIngredient) === 0 ? 'Stok habis' : 'Stok menipis'}
+              </strong>}
+              <p>Stok saat ini: <strong>{stockFormatter.format(Number(selectedIngredient.current_stock ?? 0))} {selectedIngredient.yield_unit || selectedIngredient.unit || 'unit'}</strong>
+                {' ('}{purchaseFormatter.format(Number(selectedIngredient.current_stock ?? 0) / Number(selectedIngredient.yield_quantity || 1))} {selectedIngredient.unit || 'unit'}{')'}</p>
+              <p className="mt-1 text-xs text-slate-200">Batas menipis: {stockFormatter.format(Number(selectedIngredient.min_stock_alert ?? 0) * Number(selectedIngredient.yield_quantity || 1))} {selectedIngredient.yield_unit || selectedIngredient.unit || 'unit'}
+                {' · '}1 {selectedIngredient.unit || 'unit'} = {selectedIngredient.yield_quantity} {selectedIngredient.yield_unit || selectedIngredient.unit || 'unit'}</p>
+            </div>}
             <div>
               <label htmlFor="request-quantity" className="mb-1 block text-sm font-semibold text-white">Jumlah masuk ({selectedIngredient?.unit || 'satuan beli'})</label>
               <input id="request-quantity" type="number" min="0.01" max="100000" step="0.01" required

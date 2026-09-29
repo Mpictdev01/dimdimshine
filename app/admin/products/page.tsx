@@ -6,6 +6,7 @@ import { browserDataClient } from '@/lib/browser-data-client';
 import { saveProduct, deleteProducts } from '@/app/actions/products';
 import { Plus, Edit2, Trash2, Search, Loader2, X, Save, Copy } from 'lucide-react';
 import clsx from 'clsx';
+import { calculateRecipeAvailability, formatIngredientShortages, type StockIngredient } from '@/lib/product-availability';
 
 const supabase = browserDataClient;
 
@@ -41,19 +42,18 @@ export default function AdminProducts() {
     ]);
     
     if (prodRes.data && ingRes.data) {
-      const ingredientsStockMap = new Map(ingRes.data.map(i => [i.id, i.current_stock || 0]));
+      const ingredientsMap = new Map<string, StockIngredient>(
+        ingRes.data.map((ingredient: StockIngredient) => [ingredient.id, ingredient] as const),
+      );
       const ingredientsCostMap = new Map(ingRes.data.map(i => [i.id, Number(i.cost_price || 0)]));
       
       const mappedProducts = prodRes.data.map(p => {
         let maxStock = p.stock || 0;
         let hpp = Number(p.cost_price || 0);
         
-        if (p.product_ingredients && p.product_ingredients.length > 0) {
-          const possibleQuantities = p.product_ingredients.map((pi: any) => {
-            const availableIngStock = ingredientsStockMap.get(pi.ingredient_id) || 0;
-            return Math.floor(availableIngStock / pi.quantity);
-          });
-          maxStock = Math.min(...possibleQuantities);
+        const availability = calculateRecipeAvailability(p.product_ingredients, ingredientsMap);
+        if (availability) {
+          maxStock = availability.maxStock;
 
           let calculatedBomCost = 0;
           p.product_ingredients.forEach((pi: any) => {
@@ -63,7 +63,8 @@ export default function AdminProducts() {
           hpp = calculatedBomCost;
         }
         
-        return { ...p, stock: maxStock, calculated_hpp: hpp };
+        return { ...p, stock: maxStock, calculated_hpp: hpp,
+          ingredientShortages: availability?.shortages ?? [] };
       });
       setProducts(mappedProducts);
     } else if (prodRes.data) {
@@ -329,6 +330,11 @@ export default function AdminProducts() {
                       </td>
                       <td className="p-4 font-medium text-slate-700">
                         {product.stock || 0} {product.units?.name || ''}
+                        {product.ingredientShortages?.length > 0 && (
+                          <p className="mt-1 max-w-xs break-words rounded-lg border border-red-400/50 bg-red-950/60 px-2 py-1.5 text-xs font-semibold text-white">
+                            Habis: {formatIngredientShortages(product.ingredientShortages)}
+                          </p>
+                        )}
                       </td>
                       <td className="p-4 font-semibold text-slate-800">
                         {formatPrice(product.price)}

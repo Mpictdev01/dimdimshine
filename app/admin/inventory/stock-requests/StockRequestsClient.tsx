@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ClipboardCheck, Loader2, RefreshCw, X } from 'lucide-react';
+import { Check, ClipboardCheck, Loader2, Pencil, RefreshCw, Trash2, X } from 'lucide-react';
 import {
+  amendIngredientStockRequest, hideIngredientStockRequest,
   pendingIngredientStockRequests, reviewedIngredientStockRequests,
   reviewIngredientStockRequest, type IngredientStockRequest,
 } from '@/app/actions/ingredient-stock-requests';
@@ -20,6 +21,7 @@ export default function StockRequestsClient() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [selected, setSelected] = useState<{ request: IngredientStockRequest; decision: Decision } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<IngredientStockRequest | null>(null);
   const [reviewNote, setReviewNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const latestLoad = useRef(0);
@@ -67,20 +69,45 @@ export default function StockRequestsClient() {
     setSubmitting(true);
     setError('');
     try {
-      const result = await reviewIngredientStockRequest({
+      const input = {
         requestId: selected.request.id,
         decision: selected.decision,
         note: reviewNote,
-      });
+      };
+      const result = selected.request.status === 'pending'
+        ? await reviewIngredientStockRequest(input)
+        : await amendIngredientStockRequest({ ...input, expectedStatus: selected.request.status });
       if (!result.success) { setError(result.error); return; }
-      setNotice(selected.decision === 'approved'
-        ? 'Permintaan disetujui. Stok bahan sudah bertambah.'
-        : 'Permintaan ditolak. Stok bahan tidak berubah.');
+      setNotice(selected.request.status === 'pending'
+        ? selected.decision === 'approved'
+          ? 'Permintaan disetujui. Stok bahan sudah bertambah.'
+          : 'Permintaan ditolak. Stok bahan tidak berubah.'
+        : selected.decision === 'approved'
+          ? 'Keputusan diubah menjadi Disetujui. Stok bahan bertambah.'
+          : 'Keputusan diubah menjadi Ditolak. Stok bahan dikurangi.');
       setSelected(null);
-      if (page > 0 && requests.length === 1) setPage(page - 1);
+      if (tab === 'pending' && page > 0 && requests.length === 1) setPage(page - 1);
       else await load();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Gagal memutuskan permintaan stok.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitDelete = async () => {
+    if (!deleteTarget) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const result = await hideIngredientStockRequest(deleteTarget.id);
+      if (!result.success) { setError(result.error); return; }
+      setNotice('Riwayat pengajuan disembunyikan. Stok tidak berubah.');
+      setDeleteTarget(null);
+      if (page > 0 && requests.length === 1) setPage(page - 1);
+      else await load();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Gagal menghapus riwayat pengajuan.');
     } finally {
       setSubmitting(false);
     }
@@ -136,12 +163,22 @@ export default function StockRequestsClient() {
             {request.review_note && <p>Catatan: {request.review_note}</p>}
             {request.status === 'approved' && <p>Stok: {request.stock_before} → {request.stock_after} {request.yield_unit_snapshot}</p>}
           </div>}
-          {request.status === 'pending' && <div className="mt-4 flex gap-2">
-            <button type="button" onClick={() => openDecision(request, 'approved')}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 py-2 font-semibold text-white hover:bg-emerald-600"><Check size={17} /> Setujui</button>
-            <button type="button" onClick={() => openDecision(request, 'rejected')}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-400 px-3 py-2 font-semibold text-white hover:bg-red-900/40"><X size={17} /> Tolak</button>
-          </div>}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {request.status === 'pending' ? <>
+              <button type="button" onClick={() => openDecision(request, 'approved')}
+                className="flex min-w-32 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 py-2 font-semibold text-white hover:bg-emerald-600"><Check size={17} /> Setujui</button>
+              <button type="button" onClick={() => openDecision(request, 'rejected')}
+                className="flex min-w-32 flex-1 items-center justify-center gap-2 rounded-xl border border-red-400 px-3 py-2 font-semibold text-white hover:bg-red-900/40"><X size={17} /> Tolak</button>
+            </> : <button type="button"
+              onClick={() => openDecision(request, request.status === 'approved' ? 'rejected' : 'approved')}
+              className="flex min-w-40 flex-1 items-center justify-center gap-2 rounded-xl border border-white/40 px-3 py-2 font-semibold text-white hover:bg-red-900/40">
+              <Pencil size={17} /> Ubah ke {request.status === 'approved' ? 'Ditolak' : 'Disetujui'}
+            </button>}
+            <button type="button" onClick={() => { setDeleteTarget(request); setError(''); }}
+              className="flex min-w-36 flex-1 items-center justify-center gap-2 rounded-xl border border-red-400/70 px-3 py-2 font-semibold text-white hover:bg-red-950/50">
+              <Trash2 size={17} /> Hapus riwayat
+            </button>
+          </div>
         </article>)}
       </div>}
 
@@ -153,10 +190,17 @@ export default function StockRequestsClient() {
 
     {selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-labelledby="stock-decision-title">
       <div className="clay-surface w-full max-w-md rounded-2xl p-5">
-        <h2 id="stock-decision-title" className="text-xl font-bold text-white">{selected.decision === 'approved' ? 'Setujui stok masuk?' : 'Tolak permintaan stok?'}</h2>
+        <h2 id="stock-decision-title" className="text-xl font-bold text-white">
+          {selected.request.status === 'pending'
+            ? selected.decision === 'approved' ? 'Setujui stok masuk?' : 'Tolak permintaan stok?'
+            : selected.decision === 'approved' ? 'Ubah keputusan menjadi Disetujui?' : 'Ubah keputusan menjadi Ditolak?'}
+        </h2>
         <p className="mt-2 text-sm text-slate-200">
           {selected.request.ingredient?.name}: +{selected.request.quantity_purchase} {selected.request.unit_snapshot}.
-          {selected.decision === 'approved' ? ' Stok akan langsung bertambah setelah persetujuan.' : ' Stok tidak akan berubah.'}
+          {selected.decision === 'approved' ? ' Stok akan bertambah setelah persetujuan.'
+            : selected.request.status === 'approved'
+              ? ' Stok yang pernah ditambahkan akan dikurangi. Jika stok saat ini tidak cukup, perubahan ditolak.'
+              : ' Stok tidak akan berubah.'}
         </p>
         <label htmlFor="stock-review-note" className="mt-4 block text-sm font-semibold text-white">
           Catatan {selected.decision === 'rejected' ? 'penolakan (wajib)' : '(opsional)'}
@@ -169,6 +213,26 @@ export default function StockRequestsClient() {
           <button type="button" disabled={submitting} onClick={() => void submitDecision()} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-700 px-3 py-2 font-semibold text-white disabled:opacity-50">
             {submitting && <Loader2 size={16} className="animate-spin" />}
             {selected.decision === 'approved' ? 'Ya, Setujui' : 'Ya, Tolak'}
+          </button>
+        </div>
+      </div>
+    </div>}
+
+    {deleteTarget && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4"
+      role="dialog" aria-modal="true" aria-labelledby="stock-delete-title">
+      <div className="clay-surface w-full max-w-md rounded-2xl p-5">
+        <h2 id="stock-delete-title" className="text-xl font-bold text-white">Hapus riwayat pengajuan?</h2>
+        <p className="mt-2 text-sm text-slate-200">
+          Pengajuan {deleteTarget.ingredient?.name} oleh {deleteTarget.requester?.full_name || 'kasir'} akan disembunyikan dari daftar kasir dan admin.
+          Stok tetap sama dan jejak pergerakannya tetap tersimpan untuk laporan.
+        </p>
+        {error && <p role="alert" className="mt-3 rounded-lg border border-red-400/50 bg-red-950/50 p-2 text-sm text-white">{error}</p>}
+        <div className="mt-4 flex gap-2">
+          <button type="button" disabled={submitting} onClick={() => setDeleteTarget(null)}
+            className="flex-1 rounded-xl border border-white/30 px-3 py-2 font-semibold text-white">Batal</button>
+          <button type="button" disabled={submitting} onClick={() => void submitDelete()}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-700 px-3 py-2 font-semibold text-white disabled:opacity-50">
+            {submitting && <Loader2 size={16} className="animate-spin" />} Ya, Hapus
           </button>
         </div>
       </div>

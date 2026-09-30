@@ -20,6 +20,7 @@ export type IngredientStockRequest = {
   review_note: string | null;
   stock_before: number | null;
   stock_after: number | null;
+  deleted_at?: string | null;
   ingredient: { name: string } | null;
   requester?: { full_name: string } | null;
   reviewer?: { full_name: string } | null;
@@ -37,6 +38,10 @@ function errorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) message = error.message;
   if (error && typeof error === 'object' && 'message' in error &&
       typeof error.message === 'string' && error.message) message = error.message;
+  if (/deleted_at|ingredient_stock_request_events|pos_amend_ingredient_stock_request|pos_hide_ingredient_stock_request/i.test(message) &&
+      /does not exist|could not find|schema cache/i.test(message)) {
+    return 'Fitur ubah keputusan dan hapus riwayat belum aktif di database. Migrasi 202609290003 perlu diterapkan.';
+  }
   if (/ingredient_stock_requests|pos_request_ingredient_stock|pos_review_ingredient_stock_request/i.test(message) &&
       /does not exist|could not find|schema cache/i.test(message)) {
     return 'Fitur persetujuan stok belum aktif di database. Migrasi 202609290002 perlu diterapkan.';
@@ -79,6 +84,7 @@ export async function myIngredientStockRequests() {
   const actor = await requireRole(['cashier']);
   const { data, error } = await db().from('ingredient_stock_requests')
     .select(requestColumns).eq('requested_by', actor.userId)
+    .is('deleted_at', null)
     .order('requested_at', { ascending: false }).limit(30);
   if (error) throw new Error(errorMessage(error, 'Gagal memuat permintaan stok.'));
   return (data ?? []) as unknown as IngredientStockRequest[];
@@ -90,6 +96,7 @@ export async function pendingIngredientStockRequests(page = 0) {
   const pageSize = 30;
   const { data, count, error } = await db().from('ingredient_stock_requests')
     .select(requestColumns, { count: 'exact' }).eq('status', 'pending')
+    .is('deleted_at', null)
     .order('requested_at', { ascending: true })
     .range(page * pageSize, (page + 1) * pageSize - 1);
   if (error) throw new Error(errorMessage(error, 'Gagal memuat antrean persetujuan.'));
@@ -102,6 +109,7 @@ export async function reviewedIngredientStockRequests(page = 0) {
   const pageSize = 30;
   const { data, count, error } = await db().from('ingredient_stock_requests')
     .select(requestColumns, { count: 'exact' }).neq('status', 'pending')
+    .is('deleted_at', null)
     .order('reviewed_at', { ascending: false })
     .range(page * pageSize, (page + 1) * pageSize - 1);
   if (error) throw new Error(errorMessage(error, 'Gagal memuat riwayat persetujuan.'));
@@ -134,17 +142,86 @@ export async function reviewIngredientStockRequest(input: {
   }
 }
 
-export async function approvedIngredientStockMovements() {
-  await requireRole(['manager', 'super_admin']);
-  const rows: { id: string; ingredient_id: string; quantity_stock: number; reviewed_at: string }[] = [];
+export async function amendIngredientStockRequest(input: {
+  requestId: string;
+  expectedStatus: 'approved' | 'rejected';
+  decision: 'approved' | 'rejected';
+  note: string;
+}) {
+  try {
+    const actor = await requireRole(['super_admin']);
+    const note = input.note?.trim() ?? '';
+    if (!/^[0-9a-f-]{36}$/i.test(input.requestId) ||
+        !['approved', 'rejected'].includes(input.expectedStatus) ||
+        !['approved', 'rejected'].includes(input.decision) ||
+        input.expectedStatus === input.decision ||
+        note.length > 500 || (input.decision === 'rejected' && note.length < 3)) {
+      throw new Error('Keputusan atau catatan tidak valid.');
+    }
+    const { data, error } = await db().rpc('pos_amend_ingredient_stock_request', {
+      p_request_id: input.requestId,
+      p_actor_id: actor.userId,
+      p_expected_status: input.expectedStatus,
+      p_decision: input.decision,
+      p_review_note: note || null,
+    });
+    if (error) throw error;
+    return { success: true as const, request: data as IngredientStockRequest };
+  } catch (error) {
+    return { success: false as const, error: errorMessage(error, 'Gagal mengubah keputusan stok.') };
+  }
+}
+
+export async function hideIngredientStockRequest(requestId: string) {
+  try {
+    const actor = await requireRole(['super_admin']);
+    if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error('Permintaan stok tidak valid.');
+    const { data, error } = await db().rpc('pos_hide_ingredient_stock_request', {
+      p_request_id: requestId,
+      p_actor_id: actor.userId,
+    });
+    if (error) throw error;
+    return { success: true as const, request: data as IngredientStockRequest };
+  } catch (error) {
+    return { success: false as const, error: errorMessage(error, 'Gagal menghapus riwayat pengajuan.') };
+  }
+}
+
+export type StockRequestMovement = {
+  id: string;
+  ingredient_id: string;
+  request_id: string;
+  stock_delta: number;
+  created_at: string;
+};
+
+async function legacyApprovedStockMovements(): Promise<StockRequestMovement[]> {
+  const rows: StockRequestMovement[] = [];
   for (let offset = 0; ; offset += 500) {
     const { data, error } = await db().from('ingredient_stock_requests')
       .select('id,ingredient_id,quantity_stock,reviewed_at')
       .eq('status', 'approved').order('reviewed_at', { ascending: false })
       .range(offset, offset + 499);
-    // Keep the existing stock report available while the new migration is
-    // being applied. Other database errors must remain visible.
     if (error?.code === 'PGRST205' || error?.code === '42P01') return [];
+    if (error) throw new Error(errorMessage(error, 'Gagal memuat pergerakan stok kasir.'));
+    rows.push(...(data ?? []).map(row => ({
+      id: row.id, ingredient_id: row.ingredient_id, request_id: row.id,
+      stock_delta: Number(row.quantity_stock), created_at: row.reviewed_at,
+    })));
+    if (!data || data.length < 500) return rows;
+  }
+}
+
+export async function ingredientStockRequestMovements(): Promise<StockRequestMovement[]> {
+  await requireRole(['manager', 'super_admin']);
+  const rows: StockRequestMovement[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await db().from('ingredient_stock_request_events')
+      .select('id,ingredient_id,request_id,stock_delta,created_at')
+      .neq('stock_delta', 0).order('created_at', { ascending: false })
+      .range(offset, offset + 499);
+    if (error?.code === 'PGRST205' || error?.code === '42P01')
+      return legacyApprovedStockMovements();
     if (error) throw new Error(errorMessage(error, 'Gagal memuat pergerakan stok kasir.'));
     rows.push(...(data ?? []));
     if (!data || data.length < 500) return rows;
